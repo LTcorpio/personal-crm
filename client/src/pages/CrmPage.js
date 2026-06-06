@@ -22,6 +22,9 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
   const [loading, setLoading] = useState(false);
   const [searchTxt, setSearchTxt] = useState('');
   const [selectedTagPath, setSelectedTagPath] = useState(null);
+  // 分页状态管理
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
   
   // 列表模式下的列设置
   const [columnConfigs, setColumnConfigs] = useState(() => {
@@ -38,6 +41,11 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
     const saved = localStorage.getItem('crm_search_fields');
     return saved ? JSON.parse(saved) : [];
   });
+  // 当搜索词或标签路径改变时，自动将页码重置回第 1 页
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTxt, selectedTagPath, searchFields]);
+  
   // 查看联系人详情的 Modal 状态
   const [detailContact, setDetailContact] = useState(null);
 
@@ -111,19 +119,24 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
 
   const filteredContacts = filterContacts(contacts, searchTxt, searchFields, selectedTagPath);
 
+  // 计算当前页需要显示的数据切片
+  const startIndex = (currentPage - 1) * pageSize;
+  const pagedContacts = filteredContacts.slice(startIndex, startIndex + pageSize);
+
+  const isLastPage = currentPage >= Math.ceil(filteredContacts.length / pageSize);
+
   // 渲染前，动态生成带人数的树数据
   const processedTagTree = enrichTreeWithCounts(tagTree, contacts);
 
   return (
     <>
-      <Layout className="max-w-[100vw] mx-auto bg-transparent p-6 flex flex-row gap-6 relative">
+      <Layout className="max-w-[100vw] mx-auto bg-transparent flex flex-row relative h-full overflow-hidden">
         {/* 左侧：常驻标签树导航面板 */}
         <Sider
           theme="light"
           trigger={null}
           width={siderWidth}
-          className="bg-transparent rounded-xl !border-0 transition-none"
-          style={{ background: 'transparent' }}
+          className="bg-white transition-none border-r border-gray-200"
         >
           <Sidebar 
             processedTagTree={processedTagTree}
@@ -132,83 +145,118 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
           />
         </Sider>
 
-        {/* 隐形拖拽条。放置在 Sider 和 Content 的 gap 间隙正中间 */}
+        {/* 隐形拖拽条，放置在 Sider 和 Content 的 gap 间隙正中间 */}
         <div
           onMouseDown={handleMouseDown}
-          className="w-2 cursor-col-resize hover:bg-blue-400/50 active:bg-blue-500 rounded transition-colors"
+          className="absolute top-0 bottom-0 cursor-col-resize group flex items-center justify-center transition-colors"
           style={{
-            marginRight: '-20px', // 抵消部分 gap 从而完美居中
-            marginLeft: '-20px',
-            zIndex: 10,
-            height: 'calc(100vh - 120px)',
-            position: 'sticky',
-            top: '96px'
+            left: `${siderWidth}px`, // 动态精准定位在侧边栏右侧边界
+            width: '8px',            // 鼠标交互热区宽度
+            marginLeft: '-4px',      // 居中对齐边界线
+            zIndex: 50,              // 确保置于最顶层
           }}
-        />
+        >
+          {/* 内部高亮线条：平时透明，鼠标移入热区(group-hover)时显现 */}
+          <div className="w-[4px] h-full bg-transparent 
+            /* 1. 鼠标移入热区（Hover）：颜色变淡（使用 40% 不透明度） */
+            group-hover:bg-blue-500/40 
+            
+            /* 2. 鼠标按住拖动（Active）：颜色变深（使用 80% 不透明度） */
+            group-hover:active:bg-blue-500/80 
+            
+            /* 3. 伴有颜色（colors）和宽度/变形（all）的平滑过渡动画，时长 200 毫秒 */
+            transition-all duration-200 ease-in-out
+          " />
+        </div>
         
         {/* 右侧：搜索框与联系人展示区 */}
-        <Content className="flex-1 min-w-0">
+        <Content className="flex-1 min-w-0 flex flex-col h-full bg-gray-50/50">
           <SearchFilter 
             searchTxt={searchTxt}
             setSearchTxt={setSearchTxt}
             selectedTagPath={selectedTagPath}
             searchFields={searchFields}
             onSearchFieldsChange={handleSearchFieldsChange}
+            filteredCount={filteredContacts.length}
+            totalCount={contacts.length}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            onPageChange={(page, size) => {
+              setCurrentPage(page);
+              setPageSize(size);
+            }}
           />
           
           {viewMode === 'list' && (
-            <div className="bg-white p-3 rounded-xl border border-gray-100 mb-4 flex items-center justify-between">
-              <span className="text-xs text-gray-500 font-medium">💡 提示：点击列表中的头像或姓名可查看完整详情卡片。</span>
+            <div className="bg-amber-50 px-6 py-2 border-b border-amber-100 flex items-center justify-between shrink-0">
+              <span className="text-xs text-amber-700 font-medium">💡 提示：点击列表中的头像或姓名可查看完整详情卡片。</span>
               <Button size="small" icon={<SettingOutlined />} onClick={() => setSettingVisible(true)}>
                 列设置
               </Button>
             </div>
           )}
 
-          {loading ? (
-            <div className="flex justify-center items-center py-24"><Spin size="large" tip="加载中..." /></div>
-          ) : filteredContacts.length > 0 ? (
-            <>
-              {/* 1. 标准卡片模式 */}
-              {viewMode === 'card' && (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-6">
-                  {filteredContacts.map(item => (
-                    <ContactCard
-                      key={item.id}
-                      contact={item}
-                      onClick={() => { setEditingContact(item); setFormVisible(true); }}
-                      onRelatedClick={handleRelatedClick}
-                    />
-                  ))}
+          <div id="crm-content" className="flex-1 overflow-y-auto p-6">
+            {loading ? (
+              <div className="flex justify-center items-center py-24"><Spin size="large" tip="加载中..." /></div>
+            ) : filteredContacts.length > 0 ? (
+              <>
+                {/* 1. 标准卡片模式 */}
+                {viewMode === 'card' && (
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-6">
+                    {pagedContacts.map(item => (
+                      <ContactCard
+                        key={item.id}
+                        contact={item}
+                        onClick={() => { setEditingContact(item); setFormVisible(true); }}
+                        onRelatedClick={handleRelatedClick}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* 2. 微型卡片模式 (头像、姓名、性别、昵称) */}
+                {viewMode === 'mini' && (
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-4">
+                    {pagedContacts.map(item => (
+                      <ContactMiniCard
+                        key={item.id}
+                        contact={item}
+                        onClick={() => setDetailContact(item)}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* 3. 列表表格模式 */}
+                {viewMode === 'list' && (
+                  <ContactListTable
+                    dataSource={pagedContacts}
+                    columnConfigs={columnConfigs}
+                    setDetailContact={setDetailContact}
+                    setEditingContact={setEditingContact}
+                    setFormVisible={setFormVisible}
+                    handleDeleteContact={handleDeleteContact}
+                  />
+                )}
+                {/* 触底提示 */}
+                <div className="text-center text-gray-400 text-xs mt-8 pb-4 select-none tracking-wide font-sans">
+                  {isLastPage ? (
+                    <span>— 这是最后一页了 —</span>
+                  ) : (
+                    <span
+                      className="text-blue-400/80 cursor-pointer hover:text-blue-500 transition-colors"
+                      onClick={() => {
+                        setCurrentPage(prev => prev + 1);
+                      }}
+                    >
+                      — 点击查看下一页 —
+                    </span>
+                  )}
                 </div>
-              )}
-              {/* 2. 微型卡片模式 (头像、姓名、性别、昵称) */}
-              {viewMode === 'mini' && (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-4">
-                  {filteredContacts.map(item => (
-                    <ContactMiniCard
-                      key={item.id}
-                      contact={item}
-                      onClick={() => setDetailContact(item)}
-                    />
-                  ))}
-                </div>
-              )}
-              {/* 3. 列表表格模式 */}
-              {viewMode === 'list' && (
-                <ContactListTable
-                  dataSource={filteredContacts}
-                  columnConfigs={columnConfigs}
-                  setDetailContact={setDetailContact}
-                  setEditingContact={setEditingContact}
-                  setFormVisible={setFormVisible}
-                  handleDeleteContact={handleDeleteContact}
-                />
-              )}
-            </>
-          ) : (
-            <Empty className="py-20 bg-white rounded-xl border border-dashed border-gray-200" description="无匹配的联系人" />
-          )}
+              </>
+            ) : (
+              <Empty className="py-20 bg-white rounded-xl border border-dashed border-gray-200" description="无匹配的联系人" />
+            )}
+          </div>
         </Content>
       </Layout>
 
@@ -265,7 +313,12 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
         )}
       </Modal>
 
-      {/* <FloatButton.BackTop duration={300} visibilityHeight={300} style={{ right: 24, bottom: 24 }} /> */}
+      <FloatButton.BackTop 
+        duration={300} // 回到顶部的动画时长（毫秒）
+        visibilityHeight={150} // 滚动到多高（像素）才显示该按钮
+        target={() => document.getElementById('crm-content') || window}
+        style={{ right: 24, bottom: 24 }} // 调整在右下角的位置
+      />
     </>
   );
 }

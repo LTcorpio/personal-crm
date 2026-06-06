@@ -34,6 +34,10 @@ export const filterContacts = (contacts, searchTxt, searchFields, selectedTagPat
   return contacts.filter(c => {
     // 1. 如果没有搜索关键词和标签，不过滤
     if (!searchTxt || !searchFields || searchFields.length === 0) {
+      // 支持“无标签”筛选
+      if (selectedTagPath === '__NO_TAGS__') {
+        return !c.tag || c.tag.length === 0;
+      }
       return !selectedTagPath || (c.tag && c.tag.some(t => t === selectedTagPath || t.startsWith(selectedTagPath + '/')));
     }
 
@@ -56,10 +60,13 @@ export const filterContacts = (contacts, searchTxt, searchFields, selectedTagPat
       (searchFields.includes('related') && c.related?.some(r => r.name?.includes(searchTxt)))
     );
 
-    // 3. 标签路径匹配
-    const matchesTag = !selectedTagPath || (
-      c.tag && c.tag.some(t => t === selectedTagPath || t.startsWith(selectedTagPath + '/'))
-    );
+    // 3. 标签路径匹配,支持“无标签”与搜索框词条联动筛选
+    let matchesTag = true;
+    if (selectedTagPath === '__NO_TAGS__') {
+      matchesTag = !c.tag || c.tag.length === 0;
+    } else if (selectedTagPath) {
+      matchesTag = c.tag && c.tag.some(t => t === selectedTagPath || t.startsWith(selectedTagPath + '/'));
+    }
 
     return matchesSearch && matchesTag;
   });

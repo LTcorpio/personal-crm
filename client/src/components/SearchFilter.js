@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Input, Checkbox, Popover, Button, Space } from 'antd';
+import { Input, Checkbox, Popover, Button, Space, Pagination } from 'antd';
 import { RightOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons';
 
 // 完整的可查选项映射
@@ -28,7 +28,14 @@ export default function SearchFilter({
   setSearchTxt, 
   selectedTagPath,
   searchFields = [],
-  onSearchFieldsChange
+  onSearchFieldsChange,
+  // 结果计数
+  filteredCount = 0,
+  totalCount = 0,
+  // 分页器
+  currentPage = 1,
+  pageSize = 12,
+  onPageChange
 }) {
   const [visible, setVisible] = useState(false);
   // 气泡内部的局部临时状态，防止未点击确定就直接修改了全局搜索行为
@@ -112,7 +119,7 @@ export default function SearchFilter({
   );
 
   return (
-    <div className="bg-white p-4 rounded-xl shadow-sm mb-6 flex flex-col gap-3 border border-gray-100">
+    <div className="bg-white p-4 flex flex-col gap-3 border-b border-gray-100 shrink-0">
       <div className="flex gap-4 items-center w-full">
         <Input
           placeholder="输入关键字，回车或点击搜索..."
@@ -153,31 +160,65 @@ export default function SearchFilter({
         </Popover>
       </div>
       
-      {selectedTagPath && (
+      <div className="flex items-center justify-between mt-1 text-gray-500">
         <div className="flex items-center">
-          <span className="text-gray-500 mr-2">当前标签:</span>
-          <div className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-md border border-blue-100 flex items-center flex-wrap gap-y-1">
-            {selectedTagPath.split('/').map((tag, index, arr) => {
-              const isLast = index === arr.length - 1;
-              return (
-                <span key={index} className="flex items-center">
-                  {/* 标签文本：如果是最后一个则加粗，前面的则正常显示 */}
-                  <span className={isLast ? "font-bold text-blue-700" : "text-blue-700/80"}>
-                    {tag}
-                  </span>
-                  
-                  {/* 视觉隔离符：最后一个标签后面不加分隔符 */}
-                  {!isLast && (
-                    <span className="mx-1 text-gray-300 font-normal">
-                      <RightOutlined />
+          <span className="mr-2">当前标签:</span>
+          {selectedTagPath && selectedTagPath !== '__NO_TAGS__' ? (
+            // 选择正常标签时
+            <span className="text-xs bg-blue-50 text-blue-400 px-2 py-0.5 rounded-md border border-blue-100 flex items-center flex-wrap gap-y-1">
+              {selectedTagPath.split('/').map((tag, index, arr) => {
+                const isLast = index === arr.length - 1;
+                return (
+                  <span key={index} className="flex items-center">
+                    {/* 标签文本：如果是最后一个则加粗，前面的则正常显示 */}
+                    <span className={isLast ? "font-bold text-blue-700" : "text-blue-700/80"}>
+                      {tag}
                     </span>
-                  )}
-                </span>
-              );
-            })}
+                    
+                    {/* 视觉隔离符：最后一个标签后面不加分隔符 */}
+                    {!isLast && (
+                      <span className="mx-1 text-blue-700/30 font-normal">
+                        <RightOutlined />
+                      </span>
+                    )}
+                  </span>
+                );
+              })}
+            </span>
+          ) : selectedTagPath === '__NO_TAGS__' ? (
+            // 选择“无标签人员”时
+            <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-100 font-medium">
+              无标签人员
+            </span>
+          ) : (
+            // 未选择任何标签时
+            <span className="text-xs bg-gray-50 text-gray-600 px-2 py-0.5 rounded border border-gray-200">
+              全部
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4">
+          {/* 分页器 */}
+          {filteredCount > 0 && (
+            <Pagination
+              simple
+              current={currentPage}
+              pageSize={pageSize}
+              total={filteredCount}
+              onChange={onPageChange}
+              showSizeChanger
+              pageSizeOptions={['12', '24', '36', '48']}
+            />
+          )}
+          {/* 筛选记录数 */}
+          <div className="font-mono text-gray-400 bg-gray-50 px-2 py-1 rounded-xl border border-gray-100">
+            人数: <span className="text-blue-600 font-bold">{filteredCount}</span>
+            <span className="mx-1 text-gray-300">/</span>
+            <span className="text-gray-500">{totalCount}</span>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

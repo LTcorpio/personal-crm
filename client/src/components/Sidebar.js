@@ -4,22 +4,41 @@ import { TagsOutlined } from '@ant-design/icons';
 
 export default function Sidebar({ processedTagTree, selectedTagPath, setSelectedTagPath }) {
   return (
-    <div className="w-full h-[calc(100vh-120px)] bg-white p-4 rounded-xl shadow-sm border border-gray-100 sticky top-24 overflow-y-auto flex flex-col">
+    <div className="w-full h-full bg-white p-4 overflow-y-auto flex flex-col">
       <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
         <span className="font-bold text-gray-700 flex items-center gap-2">
           <TagsOutlined className="text-blue-500" /> 标签
         </span>
-        <Button disabled={!selectedTagPath} type="link" size="small" onClick={() => setSelectedTagPath(null)} className="p-0">
-          清除选择
-        </Button>
+        {/* 无标签人员筛选 */}
+        <div className="flex items-center gap-2">
+          <Button 
+            type={selectedTagPath === '__NO_TAGS__' ? 'primary' : 'link'} 
+            size="small" 
+            danger={selectedTagPath === '__NO_TAGS__'}
+            onClick={() => setSelectedTagPath(selectedTagPath === '__NO_TAGS__' ? null : '__NO_TAGS__')} 
+            className="text-xs"
+          >
+            {selectedTagPath === '__NO_TAGS__' ? '无标签人员' : '筛选无标签人员'}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => setSelectedTagPath(null)}
+            disabled={!selectedTagPath}
+            className="p-0 text-xs"
+          >
+            清除选择
+          </Button>
+        </div>
       </div>
       
       {processedTagTree.length > 0 ? (
         <Tree
           showLine={{ showLeafIcon: true }}
-          defaultExpandAll
+          defaultExpandParent
           treeData={processedTagTree}
-          selectedKeys={selectedTagPath ? [selectedTagPath] : []}
+          // 如果当前选中的是 '__NO_TAGS__'，树组件不要高亮任何常规节点
+          selectedKeys={selectedTagPath && selectedTagPath !== '__NO_TAGS__' ? [selectedTagPath] : []}
           onSelect={(selectedKeys) => {
             if (selectedKeys.length > 0) {
               setSelectedTagPath(selectedKeys[0]);

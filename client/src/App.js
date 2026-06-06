@@ -19,7 +19,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-slate-50 text-slate-800 select-none">
+      <div className="h-screen bg-slate-50 text-slate-800 select-none flex flex-col">
         {/* 顶部主导航栏 */}
         <Header 
           viewMode={viewMode} 
@@ -28,37 +28,33 @@ export default function App() {
         />
 
         {/* 路由视图 */}
-        <Routes>
-          {/* 默认根路径指向 CRM 页面 */}
-          <Route 
-            path="/" 
-            element={
-              <CrmPage 
-                viewMode={viewMode} 
-                setViewMode={setViewMode}
-                formVisible={formVisible}
-                setFormVisible={setFormVisible}
-                editingContact={editingContact}
-                setEditingContact={setEditingContact}
-              />
-            } 
-          />
-          <Route 
-            path="/crm" 
-            element={<Navigate to="/" replace />} 
-          />
-          {/* 亲戚计算器页面 */}
-          <Route 
-            path="/calculator" 
-            element={<RelativeCalculatorPage />} 
-          />
-        </Routes>
-
-        <FloatButton.BackTop 
-          duration={300} // 回到顶部的动画时长（毫秒）
-          visibilityHeight={300} // 滚动到多高（像素）才显示该按钮
-          style={{ right: 24, bottom: 24 }} // 调整在右下角的位置
-        />
+        <div className="flex-1 min-h-0 w-full relative">
+          <Routes>
+            {/* 默认根路径指向 CRM 页面 */}
+            <Route 
+              path="/" 
+              element={
+                <CrmPage 
+                  viewMode={viewMode} 
+                  setViewMode={setViewMode}
+                  formVisible={formVisible}
+                  setFormVisible={setFormVisible}
+                  editingContact={editingContact}
+                  setEditingContact={setEditingContact}
+                />
+              } 
+            />
+            <Route 
+              path="/crm" 
+              element={<Navigate to="/" replace />} 
+            />
+            {/* 亲戚计算器页面 */}
+            <Route 
+              path="/calculator" 
+              element={<RelativeCalculatorPage />} 
+            />
+          </Routes>
+        </div>
       </div>
     </BrowserRouter>
   );
