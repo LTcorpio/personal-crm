@@ -1,6 +1,5 @@
 node_modules
 
-crm-bk.db
-crm.db
+crm*.db
 *.xls
 *.xlsx

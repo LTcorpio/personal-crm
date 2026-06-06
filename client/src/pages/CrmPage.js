@@ -14,7 +14,7 @@ import { filterContacts, enrichTreeWithCounts } from '../utils/crmUtils';
 import { useResizableSider } from '../hooks/useResizableSider';
 
 const { Content, Sider } = Layout;
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = 'http://localhost:15197/api';
 
 export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVisible, editingContact, setEditingContact }) {
   const [contacts, setContacts] = useState([]);
@@ -244,7 +244,7 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
         open={!!detailContact}
         onCancel={() => setDetailContact(null)}
         footer={null}
-        width={450}
+        width={720}
         destroyOnHidden
         className='select-none'
       >

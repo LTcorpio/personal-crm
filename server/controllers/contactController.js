@@ -185,7 +185,7 @@ exports.getContacts = async (req, res) => {
             const formerNamesRows = await dbQuery(`SELECT name FROM former_names WHERE contact_id = ?`, [c.id]);
             // 聚合联系方式
             const methodsRows = await dbQuery(`SELECT type, value FROM contact_methods WHERE contact_id = ?`, [c.id]);
-            const contactMethods = { wechat: "", qq: "", email: "", tel: "" };
+            const contactMethods = { wechat: "", qq: "", email: "", tel: "", tiktok: "" };
             methodsRows.forEach(m => contactMethods[m.type] = m.value);
 
             // 聚合关联人

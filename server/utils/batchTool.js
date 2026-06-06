@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const xlsx = require('xlsx');
 const path = require('path');
-const { dbRun } = require('./config/database'); // 引入你现有的数据库连接
+const { dbRun } = require('../config/database'); // 引入你现有的数据库连接
 
 const app = express();
 const PORT = 3009;

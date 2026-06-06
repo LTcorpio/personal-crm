@@ -323,7 +323,7 @@ export default function ContactForm({ visible, contact, onCancel, onSave, onDele
           )}
         </Form.List>
 
-        <Form.Item name="extra" label="扩展信息" className="mt-4"><Input.TextArea rows={4} placeholder="# 教育经历&#10;- XX大学 计算机科学&#10;# 工作经历&#10;- XX公司 架构师" /></Form.Item>
+        <Form.Item name="extra" label="扩展信息" className="mt-4"><Input.TextArea rows={6} placeholder="# 教育经历&#10;- XX大学 计算机科学&#10;# 工作经历&#10;- XX公司 架构师" /></Form.Item>
         <Form.Item name="remark" label="系统备注"><Input.TextArea rows={2} /></Form.Item>
       </Form>
     </Modal>

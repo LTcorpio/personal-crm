@@ -89,7 +89,7 @@ export default function ContactListTable({
     <Table
       dataSource={dataSource}
       rowKey="id"
-      pagination={{ pageSize: 10 }}
+      pagination={false}
       className="bg-white rounded-xl border border-gray-100 overflow-hidden"
       columns={columns}
     />

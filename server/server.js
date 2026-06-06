@@ -4,7 +4,7 @@ const cors = require('cors');
 const contactRoutes = require('./routes/contactRoutes');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT;
 
 // 中间件配置
 app.use(cors());
