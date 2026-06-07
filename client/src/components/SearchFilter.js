@@ -27,14 +27,17 @@ export default function SearchFilter({
   searchTxt, 
   setSearchTxt, 
   selectedTagPath,
+  scopeType = 'tag',
+  selectedScopeName = '',
+  selectedScopeColor = '#6366f1',
   searchFields = [],
   onSearchFieldsChange,
   // 结果计数
-  filteredCount = 0,
-  totalCount = 0,
+  filteredCount,
+  totalCount,
   // 分页器
-  currentPage = 1,
-  pageSize = 12,
+  currentPage,
+  pageSize,
   onPageChange
 }) {
   const [visible, setVisible] = useState(false);
@@ -60,7 +63,7 @@ export default function SearchFilter({
     if (visible) {
       setTempFields(searchFields);
     }
-  }, [visible, searchFields]);
+  }, [visible, searchFields, onSearchFieldsChange]);
 
   // 处理全选/全不选
   const isAllChecked = tempFields.length === OPTIONS.length;
@@ -162,8 +165,19 @@ export default function SearchFilter({
       
       <div className="flex items-center justify-between mt-1 text-gray-500">
         <div className="flex items-center">
-          <span className="mr-2">当前标签:</span>
-          {selectedTagPath && selectedTagPath !== '__NO_TAGS__' ? (
+          <span className="mr-2">{scopeType === 'topic' ? '当前主题:' : '当前标签:'}</span>
+          {scopeType === 'topic' ? (
+            <span 
+              className="text-xs px-2 py-0.5 rounded-md border font-medium transition-all duration-200"
+              style={{
+                backgroundColor: `${selectedScopeColor}1f`, // 拼接 1f 实现约 12% 透明度背景
+                borderColor: selectedScopeColor,            // 原色边框
+                color: selectedScopeColor,                  // 原色文字
+              }}
+            >
+              {selectedScopeName || '未选择主题'}
+            </span>
+          ) : selectedTagPath && selectedTagPath !== '__NO_TAGS__' ? (
             // 选择正常标签时
             <span className="text-xs bg-blue-50 text-blue-400 px-2 py-0.5 rounded-md border border-blue-100 flex items-center flex-wrap gap-y-1">
               {selectedTagPath.split('/').map((tag, index, arr) => {
@@ -202,13 +216,14 @@ export default function SearchFilter({
           {/* 分页器 */}
           {filteredCount > 0 && (
             <Pagination
+            size='small'
               simple
               current={currentPage}
               pageSize={pageSize}
               total={filteredCount}
               onChange={onPageChange}
               showSizeChanger
-              pageSizeOptions={['12', '24', '36', '48']}
+              pageSizeOptions={['20', '40', '60', '80']}
             />
           )}
           {/* 筛选记录数 */}

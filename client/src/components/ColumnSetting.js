@@ -134,7 +134,7 @@ const ColumnSetting = ({ visible, columns, onClose, onSave }) => {
         <Button key="save" type="primary" onClick={handleSave}>保存</Button>
       ]}
       width={450}
-      destroyOnClose
+      destroyOnHidden
     >
       {/* 限制仅垂直轴拖拽修饰器：restrictToVerticalAxis */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis]} onDragEnd={handleDragEnd}>

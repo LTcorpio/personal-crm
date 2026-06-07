@@ -261,7 +261,135 @@ exports.getTagTree = async (req, res) => {
     }
 };
 
-// 5. Immich 缩略图网络代理
+async function getTopicsWithMembers(topicId = null) {
+    // 排序改为优先按新增的 sort_order 升序
+    const sql = `SELECT id, name, color, sort_order, created_at, updated_at FROM contact_topics ${topicId ? 'WHERE id = ?' : ''} ORDER BY sort_order ASC, created_at DESC, id DESC`;
+    const topics = await dbQuery(sql, topicId ? [topicId] : []);
+
+    const result = [];
+    for (const topic of topics) {
+        const members = await dbQuery(`
+            SELECT id, contact_id as contactId, name, sort_order as sortOrder, remark
+            FROM contact_topic_members
+            WHERE topic_id = ?
+            ORDER BY sort_order ASC, id ASC
+        `, [topic.id]);
+
+        result.push({
+            ...topic,
+            members: members.map(m => ({
+                id: m.id,
+                contactId: m.contactId || "",
+                name: m.name,
+                sortOrder: m.sortOrder,
+                remark: m.remark || ""
+            }))
+        });
+    }
+
+    return result;
+}
+
+async function replaceTopicMembers(topicId, members = []) {
+    await dbRun(`DELETE FROM contact_topic_members WHERE topic_id = ?`, [topicId]);
+
+    for (const [index, member] of members.entries()) {
+        const name = (member.name || '').trim();
+        const contactId = (member.contactId || member.id || '').trim();
+        const remark = (member.remark || '').trim();
+
+        if (!name) continue;
+
+        await dbRun(`
+            INSERT INTO contact_topic_members (topic_id, contact_id, name, sort_order, remark)
+            VALUES (?, ?, ?, ?, ?)
+        `, [topicId, contactId || null, name, index, remark]);
+    }
+}
+
+// 5. 获取主题列表
+exports.getTopics = async (req, res) => {
+    try {
+        res.json(await getTopicsWithMembers());
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "获取主题失败" });
+    }
+};
+
+// 6. 新增主题
+exports.createTopic = async (req, res) => {
+    const { name, color = '#ffffff', members = [] } = req.body;
+    const topicName = (name || '').trim();
+
+    if (!topicName) {
+        return res.status(400).json({ success: false, message: "主题名称不能为空" });
+    }
+
+    try {
+        await dbRun('BEGIN TRANSACTION');
+
+        const insertResult = await dbRun(`
+            INSERT INTO contact_topics (name, color) VALUES (?, ?)
+        `, [topicName, color]);
+
+        await replaceTopicMembers(insertResult.lastID, members);
+
+        await dbRun('COMMIT');
+        const topic = (await getTopicsWithMembers(insertResult.lastID))[0];
+        res.json({ success: true, topic });
+    } catch (error) {
+        await dbRun('ROLLBACK');
+        console.error(error);
+        res.status(500).json({ success: false, message: "保存主题失败" });
+    }
+};
+
+// 7. 更新主题
+exports.updateTopic = async (req, res) => {
+    const { id } = req.params;
+    const { name, color = '#ffffff', members = [] } = req.body;
+    const topicName = (name || '').trim();
+
+    if (!topicName) {
+        return res.status(400).json({ success: false, message: "主题名称不能为空" });
+    }
+
+    try {
+        await dbRun('BEGIN TRANSACTION');
+
+        await dbRun(`
+            UPDATE contact_topics
+            SET name = ?, color = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `, [topicName, color, id]);
+
+        await replaceTopicMembers(id, members);
+
+        await dbRun('COMMIT');
+        const topic = (await getTopicsWithMembers(id))[0];
+        res.json({ success: true, topic });
+    } catch (error) {
+        await dbRun('ROLLBACK');
+        console.error(error);
+        res.status(500).json({ success: false, message: "更新主题失败" });
+    }
+};
+
+// 8. 删除主题
+exports.deleteTopic = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        await dbRun(`DELETE FROM contact_topics WHERE id = ?`, [id]);
+        res.json({ success: true, message: "删除成功" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: "删除主题失败" });
+    }
+};
+
+// 9. Immich 缩略图网络代理
 exports.proxyFaceImage = async (req, res) => {
     const { uuid } = req.params;
     const immichUrl = `${process.env.IMMICH_BASE_URL}/api/people/${uuid}/thumbnail`;
@@ -279,5 +407,24 @@ exports.proxyFaceImage = async (req, res) => {
     } catch (error) {
         console.error(`无法获取人脸图片 [${uuid}]:`, error.message);
         res.status(404).send('图片未找到或 Immich 服务未响应');
+    }
+};
+
+// 10. 更新主题排序
+exports.updateTopicsOrder = async (req, res) => {
+    const { topicIds } = req.body; // 传入排好序的 id 数组，如 [3, 1, 2]
+    if (!Array.isArray(topicIds)) {
+        return res.status(400).json({ success: false, message: "参数错误" });
+    }
+    try {
+        await dbRun('BEGIN TRANSACTION');
+        for (const [index, id] of topicIds.entries()) {
+            await dbRun(`UPDATE contact_topics SET sort_order = ? WHERE id = ?`, [index, id]);
+        }
+        await dbRun('COMMIT');
+        res.json({ success: true, message: "排序更新成功" });
+    } catch (error) {
+        await dbRun('ROLLBACK');
+        res.status(500).json({ success: false, message: "排序更新失败" });
     }
 };

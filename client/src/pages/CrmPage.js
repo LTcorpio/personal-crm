@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, message, Spin, Empty, Tag, Modal, Layout, FloatButton } from 'antd';
 import { SettingOutlined } from '@ant-design/icons';
 import ColumnSetting, { DEFAULT_COLUMNS } from '../components/ColumnSetting';
@@ -9,6 +9,8 @@ import ContactForm from '../components/ContactForm';
 import ContactListTable from '../components/ContactListTable';
 import Sidebar from '../components/Sidebar';
 import SearchFilter from '../components/SearchFilter';
+import CrmStatsView from '../components/CrmStatsView';
+import TopicSidebar from '../components/TopicSidebar';
 
 import { filterContacts, enrichTreeWithCounts } from '../utils/crmUtils';
 import { useResizableSider } from '../hooks/useResizableSider';
@@ -16,15 +18,17 @@ import { useResizableSider } from '../hooks/useResizableSider';
 const { Content, Sider } = Layout;
 const API_BASE = 'http://localhost:15197/api';
 
-export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVisible, editingContact, setEditingContact }) {
+export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVisible, setFormVisible, editingContact, setEditingContact }) {
   const [contacts, setContacts] = useState([]);
   const [tagTree, setTagTree] = useState([]);
+  const [topics, setTopics] = useState([]);
+  const [selectedTopicId, setSelectedTopicId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchTxt, setSearchTxt] = useState('');
   const [selectedTagPath, setSelectedTagPath] = useState(null);
   // 分页状态管理
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(12);
+  const [pageSize, setPageSize] = useState(20);
   
   // 列表模式下的列设置
   const [columnConfigs, setColumnConfigs] = useState(() => {
@@ -44,7 +48,7 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
   // 当搜索词或标签路径改变时，自动将页码重置回第 1 页
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTxt, selectedTagPath, searchFields]);
+  }, [searchTxt, selectedTagPath, selectedTopicId, searchFields, crmFeatureMode]);
   
   // 查看联系人详情的 Modal 状态
   const [detailContact, setDetailContact] = useState(null);
@@ -54,33 +58,43 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
     localStorage.setItem('crm_column_configs', JSON.stringify(newConfigs));
   };
 
-  const handleSearchFieldsChange = (newFields) => {
+  const handleSearchFieldsChange = useCallback((newFields) => {
     setSearchFields(newFields);
     localStorage.setItem('crm_search_fields', JSON.stringify(newFields));
-  };
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/contacts`, {
-        params: {
-          search: searchTxt,
-          fields: searchFields.join(',')
-        }
-      });
+      const res = await axios.get(`${API_BASE}/contacts`);
       setContacts(res.data);
       const tagRes = await axios.get(`${API_BASE}/tags/tree`);
       setTagTree(tagRes.data);
+      const topicRes = await axios.get(`${API_BASE}/topics`);
+      setTopics(topicRes.data);
     } catch (err) {
       message.error('无法同步后端数据，请检查服务是否开启');
     } finally {
       setLoading(false);
     }
-  }, [searchTxt, searchFields]);
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (crmFeatureMode !== 'topics') return;
+
+    if (topics.length === 0) {
+      setSelectedTopicId(null);
+      return;
+    }
+
+    if (!topics.some(topic => topic.id === selectedTopicId)) {
+      setSelectedTopicId(topics[0].id);
+    }
+  }, [crmFeatureMode, topics, selectedTopicId]);
 
   // 处理点击关联人：通过 ID 查找联系人并展示详情弹窗
   const handleRelatedClick = (relatedId) => {
@@ -117,7 +131,74 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
     }
   };
 
-  const filteredContacts = filterContacts(contacts, searchTxt, searchFields, selectedTagPath);
+  const handleSaveTopic = async (topicId, data) => {
+    try {
+      const res = topicId
+        ? await axios.put(`${API_BASE}/topics/${topicId}`, data)
+        : await axios.post(`${API_BASE}/topics`, data);
+
+      message.success(topicId ? '主题已更新' : '主题已创建');
+      await fetchData();
+
+      if (res.data?.topic?.id) {
+        setSelectedTopicId(res.data.topic.id);
+      }
+    } catch (err) {
+      message.error('主题保存失败，请检查名称是否重复');
+      throw err;
+    }
+  };
+
+  const handleDeleteTopic = async (topicId) => {
+    try {
+      await axios.delete(`${API_BASE}/topics/${topicId}`);
+      message.success('主题已删除');
+      if (selectedTopicId === topicId) {
+        setSelectedTopicId(null);
+      }
+      fetchData();
+    } catch (err) {
+      message.error('主题删除失败');
+    }
+  };
+
+  const selectedTopic = topics.find(topic => topic.id === selectedTopicId);
+  const { topicContacts, unmatchedTopicMembers } = useMemo(() => {
+    if (!selectedTopic) return { topicContacts: [], unmatchedTopicMembers: [] };
+
+    const contactsById = new Map(contacts.map(contact => [String(contact.id), contact]));
+    const contactsByName = new Map();
+    contacts.forEach(contact => {
+      if (!contactsByName.has(contact.name)) contactsByName.set(contact.name, contact);
+    });
+
+    const seen = new Set();
+    const matched = [];
+    const unmatched = [];
+
+    (selectedTopic.members || []).forEach(member => {
+      const contact = member.contactId
+        ? contactsById.get(String(member.contactId))
+        : contactsByName.get(member.name);
+
+      if (contact) {
+        const key = String(contact.id);
+        if (!seen.has(key)) {
+          seen.add(key);
+          matched.push(contact);
+        }
+      } else {
+        unmatched.push(member);
+      }
+    });
+
+    return { topicContacts: matched, unmatchedTopicMembers: unmatched };
+  }, [contacts, selectedTopic]);
+
+  const activeContacts = crmFeatureMode === 'topics' ? topicContacts : contacts;
+  const filteredContacts = crmFeatureMode === 'topics'
+    ? filterContacts(activeContacts, searchTxt, searchFields, null)
+    : filterContacts(activeContacts, searchTxt, searchFields, selectedTagPath);
 
   // 计算当前页需要显示的数据切片
   const startIndex = (currentPage - 1) * pageSize;
@@ -130,6 +211,13 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
 
   return (
     <>
+      {crmFeatureMode === 'stats' ? (
+        <CrmStatsView
+          contacts={contacts}
+          tagTree={tagTree}
+          onContactClick={(contact) => setDetailContact(contact)}
+        />
+      ) : (
       <Layout className="max-w-[100vw] mx-auto bg-transparent flex flex-row relative h-full overflow-hidden">
         {/* 左侧：常驻标签树导航面板 */}
         <Sider
@@ -138,11 +226,22 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
           width={siderWidth}
           className="bg-white transition-none border-r border-gray-200"
         >
-          <Sidebar 
-            processedTagTree={processedTagTree}
-            selectedTagPath={selectedTagPath}
-            setSelectedTagPath={setSelectedTagPath}
-          />
+          {crmFeatureMode === 'topics' ? (
+            <TopicSidebar
+              topics={topics}
+              setTopics={setTopics}
+              selectedTopicId={selectedTopicId}
+              setSelectedTopicId={setSelectedTopicId}
+              onSaveTopic={handleSaveTopic}
+              onDeleteTopic={handleDeleteTopic}
+            />
+          ) : (
+            <Sidebar 
+              processedTagTree={processedTagTree}
+              selectedTagPath={selectedTagPath}
+              setSelectedTagPath={setSelectedTagPath}
+            />
+          )}
         </Sider>
 
         {/* 隐形拖拽条，放置在 Sider 和 Content 的 gap 间隙正中间 */}
@@ -175,10 +274,13 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
             searchTxt={searchTxt}
             setSearchTxt={setSearchTxt}
             selectedTagPath={selectedTagPath}
+            scopeType={crmFeatureMode === 'topics' ? 'topic' : 'tag'}
+            selectedScopeName={selectedTopic?.name}
+            selectedScopeColor={selectedTopic?.color}
             searchFields={searchFields}
             onSearchFieldsChange={handleSearchFieldsChange}
             filteredCount={filteredContacts.length}
-            totalCount={contacts.length}
+            totalCount={activeContacts.length}
             currentPage={currentPage}
             pageSize={pageSize}
             onPageChange={(page, size) => {
@@ -186,6 +288,13 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
               setPageSize(size);
             }}
           />
+
+          {crmFeatureMode === 'topics' && unmatchedTopicMembers.length > 0 && (
+            <div className="bg-orange-50 px-6 py-2 border-b border-orange-100 text-xs text-orange-700 shrink-0">
+              当前主题中有 {unmatchedTopicMembers.length} 位成员未匹配到联系人档案：
+              {unmatchedTopicMembers.map(member => member.name).join('、')}
+            </div>
+          )}
           
           {viewMode === 'list' && (
             <div className="bg-amber-50 px-6 py-2 border-b border-amber-100 flex items-center justify-between shrink-0">
@@ -198,7 +307,7 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
 
           <div id="crm-content" className="flex-1 overflow-y-auto p-6">
             {loading ? (
-              <div className="flex justify-center items-center py-24"><Spin size="large" tip="加载中..." /></div>
+              <div className="flex justify-center items-center py-24"><Spin size="large" description="加载中..." /></div>
             ) : filteredContacts.length > 0 ? (
               <>
                 {/* 1. 标准卡片模式 */}
@@ -259,6 +368,7 @@ export default function CrmPage({ viewMode, setViewMode, formVisible, setFormVis
           </div>
         </Content>
       </Layout>
+      )}
 
       {/* 弹窗 - 编辑信息 */}
       <ContactForm 

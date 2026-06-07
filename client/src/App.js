@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { FloatButton } from 'antd';
 import Header from './components/Header';
 import CrmPage from './pages/CrmPage';
 import RelativeCalculatorPage from './pages/RelationshipCalculator';
@@ -11,11 +10,18 @@ export default function App() {
   const [editingContact, setEditingContact] = useState(null);
 
   // 显示模式切换
-    const [viewMode, setViewModeState] = useState(() =>localStorage.getItem('crm_view_mode') || 'card');
-    const setViewMode = (mode) => {
-      setViewModeState(mode);
-      localStorage.setItem('crm_view_mode', mode);
-    };
+  const [viewMode, setViewModeState] = useState(() => localStorage.getItem('crm_view_mode') || 'card');
+  const setViewMode = (mode) => {
+    setViewModeState(mode);
+    localStorage.setItem('crm_view_mode', mode);
+  };
+
+  // CRM 功能模式切换
+  const [crmFeatureMode, setCrmFeatureModeState] = useState(() => localStorage.getItem('crm_feature_mode') || 'tags');
+  const setCrmFeatureMode = (mode) => {
+    setCrmFeatureModeState(mode);
+    localStorage.setItem('crm_feature_mode', mode);
+  };
 
   return (
     <BrowserRouter>
@@ -24,6 +30,8 @@ export default function App() {
         <Header 
           viewMode={viewMode} 
           setViewMode={setViewMode} 
+          crmFeatureMode={crmFeatureMode}
+          setCrmFeatureMode={setCrmFeatureMode}
           onAddContact={() => { setEditingContact(null); setFormVisible(true); }} 
         />
 
@@ -37,6 +45,7 @@ export default function App() {
                 <CrmPage 
                   viewMode={viewMode} 
                   setViewMode={setViewMode}
+                  crmFeatureMode={crmFeatureMode}
                   formVisible={formVisible}
                   setFormVisible={setFormVisible}
                   editingContact={editingContact}

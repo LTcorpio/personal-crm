@@ -92,6 +92,32 @@ db.serialize(() => {
             FOREIGN KEY (related_contact_id) REFERENCES contacts(id) ON DELETE SET NULL
         )
     `);
+
+    // 7. 主题分类表
+    db.run(`
+        CREATE TABLE IF NOT EXISTS contact_topics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            color TEXT DEFAULT '#ffffff',
+            sort_order INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    // 8. 主题-人员成员表。contact_id 可为空，便于先按姓名建立主题清单。
+    db.run(`
+        CREATE TABLE IF NOT EXISTS contact_topic_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic_id INTEGER NOT NULL,
+            contact_id TEXT,
+            name TEXT NOT NULL,
+            sort_order INTEGER DEFAULT 0,
+            remark TEXT,
+            FOREIGN KEY (topic_id) REFERENCES contact_topics(id) ON DELETE CASCADE,
+            FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL
+        )
+    `);
 });
 
 // 封装成 Promise 方便使用 async/await
