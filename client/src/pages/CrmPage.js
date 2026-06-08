@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Button, message, Spin, Empty, Tag, Modal, Layout, FloatButton } from 'antd';
-import { SettingOutlined } from '@ant-design/icons';
+import { Button, message, Spin, Empty, Tag, Modal, Layout, FloatButton, Pagination } from 'antd';
+import { SettingOutlined, RightOutlined } from '@ant-design/icons';
 import ColumnSetting, { DEFAULT_COLUMNS } from '../components/ColumnSetting';
 import axios from 'axios';
 import ContactCard from '../components/ContactCard';
@@ -8,6 +8,7 @@ import ContactMiniCard from '../components/ContactMiniCard';
 import ContactForm from '../components/ContactForm';
 import ContactListTable from '../components/ContactListTable';
 import Sidebar from '../components/Sidebar';
+import TagManagementModal from '../components/TagManagementModal';
 import SearchFilter from '../components/SearchFilter';
 import CrmStatsView from '../components/CrmStatsView';
 import TopicSidebar from '../components/TopicSidebar';
@@ -26,6 +27,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   const [loading, setLoading] = useState(false);
   const [searchTxt, setSearchTxt] = useState('');
   const [selectedTagPath, setSelectedTagPath] = useState(null);
+  const [tagManageVisible, setTagManageVisible] = useState(false);
   // 分页状态管理
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -214,7 +216,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
       {crmFeatureMode === 'stats' ? (
         <CrmStatsView
           contacts={contacts}
-          tagTree={tagTree}
+          tagTree={processedTagTree}
           onContactClick={(contact) => setDetailContact(contact)}
         />
       ) : (
@@ -240,6 +242,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
               processedTagTree={processedTagTree}
               selectedTagPath={selectedTagPath}
               setSelectedTagPath={setSelectedTagPath}
+              onManageTags={() => setTagManageVisible(true)}
             />
           )}
         </Sider>
@@ -273,20 +276,8 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
           <SearchFilter 
             searchTxt={searchTxt}
             setSearchTxt={setSearchTxt}
-            selectedTagPath={selectedTagPath}
-            scopeType={crmFeatureMode === 'topics' ? 'topic' : 'tag'}
-            selectedScopeName={selectedTopic?.name}
-            selectedScopeColor={selectedTopic?.color}
             searchFields={searchFields}
             onSearchFieldsChange={handleSearchFieldsChange}
-            filteredCount={filteredContacts.length}
-            totalCount={activeContacts.length}
-            currentPage={currentPage}
-            pageSize={pageSize}
-            onPageChange={(page, size) => {
-              setCurrentPage(page);
-              setPageSize(size);
-            }}
           />
 
           {crmFeatureMode === 'topics' && unmatchedTopicMembers.length > 0 && (
@@ -366,6 +357,75 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
               <Empty className="py-20 bg-white rounded-xl border border-dashed border-gray-200" description="无匹配的联系人" />
             )}
           </div>
+
+          <div className="bg-white px-6 py-3 border-t border-gray-100 flex items-center justify-between text-gray-500 shrink-0 select-none">
+            <div className="flex items-center">
+              <span className="mr-2">{crmFeatureMode === 'topics' ? '当前主题:' : '当前标签:'}</span>
+              {crmFeatureMode === 'topics' ? (
+                <span 
+                  className="text-xs px-2 py-0.5 rounded-md border font-medium transition-all duration-200"
+                  style={{
+                    backgroundColor: `${selectedTopic?.color || '#6366f1'}1f`, 
+                    borderColor: selectedTopic?.color || '#6366f1',            
+                    color: selectedTopic?.color || '#6366f1',                  
+                  }}
+                >
+                  {selectedTopic?.name || '未选择主题'}
+                </span>
+              ) : selectedTagPath && selectedTagPath !== '__NO_TAGS__' ? (
+                <span className="text-xs bg-blue-50 text-blue-400 px-2 py-0.5 rounded-md border border-blue-100 flex items-center flex-wrap gap-y-1">
+                  {selectedTagPath.split('/').map((tag, index, arr) => {
+                    const isLast = index === arr.length - 1;
+                    return (
+                      <span key={index} className="flex items-center">
+                        <span className={isLast ? "font-bold text-blue-700" : "text-blue-700/80"}>
+                          {tag}
+                        </span>
+                        {!isLast && (
+                          <span className="mx-1 text-blue-700/30 font-normal">
+                            <RightOutlined />
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })}
+                </span>
+              ) : selectedTagPath === '__NO_TAGS__' ? (
+                <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-100 font-medium">
+                  无标签人员
+                </span>
+              ) : (
+                <span className="text-xs bg-gray-50 text-gray-600 px-2 py-0.5 rounded border border-gray-200">
+                  全部
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* 分页器 */}
+              {filteredContacts.length > 0 && (
+                <Pagination
+                  size='small'
+                  simple
+                  current={currentPage}
+                  pageSize={pageSize}
+                  total={filteredContacts.length}
+                  onChange={(page, size) => {
+                    setCurrentPage(page);
+                    setPageSize(size);
+                  }}
+                  showSizeChanger
+                  pageSizeOptions={['20', '40', '60', '80']}
+                />
+              )}
+              {/* 筛选记录数 */}
+              <div className="font-mono text-gray-400 bg-gray-50 px-2 py-1 rounded-xl border border-gray-100 text-sm">
+                人数: <span className="text-blue-600 font-bold">{filteredContacts.length}</span>
+                <span className="mx-1 text-gray-300">/</span>
+                <span className="text-gray-500">{crmFeatureMode === 'topics' ? topicContacts.length : contacts.length}</span>
+              </div>
+            </div>
+          </div>
         </Content>
       </Layout>
       )}
@@ -423,11 +483,21 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         )}
       </Modal>
 
+      {/* 弹窗 - 标签管理 */}
+      <TagManagementModal
+        visible={tagManageVisible}
+        onClose={() => {
+          setTagManageVisible(false);
+          fetchData(); // 关闭弹窗时自动同步最新标签树和人员变动计数
+        }}
+        tagTree={tagTree}
+      />
+
       <FloatButton.BackTop 
         duration={300} // 回到顶部的动画时长（毫秒）
         visibilityHeight={150} // 滚动到多高（像素）才显示该按钮
         target={() => document.getElementById('crm-content') || window}
-        style={{ right: 24, bottom: 24 }} // 调整在右下角的位置
+        style={{ right: 24, bottom: 72 }} // 调整在右下角的位置
       />
     </>
   );

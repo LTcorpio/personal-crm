@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'; // 1. 引入 React 钩子
-import { Button, Radio, Select, Drawer } from 'antd'; // 2. 引入 Drawer 组件
+import { useState, useEffect } from 'react';
+import { Button, Radio, Select, Drawer, Segmented } from 'antd';
 import {
   PlusOutlined,
   AppstoreOutlined,
@@ -10,12 +10,10 @@ import {
   TagsOutlined,
   BarChartOutlined,
   ApartmentOutlined,
-  QuestionCircleOutlined // 3. 引入一个问号图标
+  QuestionCircleOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown'; // 4. 引入项目自带的 markdown 渲染器
-
-const { Option } = Select;
+import ReactMarkdown from 'react-markdown';
 
 export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFeatureMode, onAddContact }) {
   const navigate = useNavigate();
@@ -40,7 +38,7 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
   }, [drawerVisible, readmeContent]);
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 px-6 py-4 flex items-center justify-between relative">
+    <header className="bg-cyan shadow-sm border-b border-gray-200 sticky top-0 z-40 px-6 py-4 flex items-center justify-between relative">
       {/* 左侧：Logo + 页面级路由切换 */}
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
@@ -67,17 +65,12 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
             value={crmFeatureMode}
             onChange={(value) => setCrmFeatureMode(value)}
             style={{ width: 200 }}
-          >
-            <Option value="tags">
-              <TagsOutlined /> 按标签查看
-            </Option>
-            <Option value="topics">
-              <ApartmentOutlined /> 按主题查看
-            </Option>
-            <Option value="stats">
-              <BarChartOutlined /> 生日信息统计
-            </Option>
-          </Select>
+            options={[
+              { value: 'tags', label: <><TagsOutlined /> 按标签查看</> },
+              { value: 'topics', label: <><ApartmentOutlined /> 按主题查看</> },
+              { value: 'stats', label: <><BarChartOutlined /> 信息统计</> },
+            ]}
+          />
         </div>
       )}
 
@@ -93,11 +86,15 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
             >
               新增联系人
             </Button>}
-            <Radio.Group value={viewMode} onChange={(e) => setViewMode(e.target.value)} buttonStyle="solid">
-              <Radio.Button value="card"><AppstoreOutlined /></Radio.Button>
-              <Radio.Button value="mini"><HarmonyOSOutlined /></Radio.Button>
-              <Radio.Button value="list"><BarsOutlined /></Radio.Button>
-            </Radio.Group>
+            <Segmented
+              options={[
+                { value: 'card', icon: <AppstoreOutlined /> },
+                { value: 'mini', icon: <HarmonyOSOutlined /> },
+                { value: 'list', icon: <BarsOutlined /> },
+              ]}
+              value={viewMode}
+              onChange={e => setViewMode(e)}
+            />
           </>
         )}
         

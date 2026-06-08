@@ -9,6 +9,8 @@ router.delete('/contacts/:id', contactController.deleteContact);
 
 // 标签树管理
 router.get('/tags/tree', contactController.getTagTree);
+router.put('/tags/order', contactController.updateTagsOrder);
+router.delete('/tags/:id', contactController.deleteTag);
 
 // 主题分类管理
 router.get('/topics', contactController.getTopics);

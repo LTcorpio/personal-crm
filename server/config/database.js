@@ -42,6 +42,7 @@ db.serialize(() => {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             parent_id INTEGER,
+            sort_order INTEGER DEFAULT 0,
             FOREIGN KEY (parent_id) REFERENCES tags(id) ON DELETE CASCADE,
             UNIQUE(name, parent_id)
         )

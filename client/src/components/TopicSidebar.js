@@ -176,8 +176,8 @@ export default function TopicSidebar({
   };
 
   return (
-    <div className="w-full h-full bg-white p-4 overflow-y-auto flex flex-col">
-      <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+    <div className="w-full h-full bg-white flex flex-col">
+      <div className="flex items-center justify-between p-4 pb-2 border-b border-gray-100">
         <span className="font-bold text-gray-700 flex items-center gap-2">
           <ApartmentOutlined className="text-indigo-500" /> 主题分类
         </span>
@@ -191,41 +191,43 @@ export default function TopicSidebar({
         </Button>
       </div>
 
-      {topics.length > 0 ? (
-        <div className="space-y-2">
-          {topics.map(topic => {
-            const active = selectedTopicId === topic.id;
-            // 颜色加上透明度（例如 12%，即后置加上十六进制的 1f）
-            const baseColor = topic.color || '#6366f1';
-            const bgStyle = active 
-              ? { backgroundColor: `${baseColor}26`, borderColor: baseColor } 
-              : { backgroundColor: `${baseColor}0d`, borderColor: 'transparent' };
+      <div className="flex-1 p-2 min-h-0 overflow-y-auto">
+        {topics.length > 0 ? (
+          <div className="space-y-2">
+            {topics.map(topic => {
+              const active = selectedTopicId === topic.id;
+              // 颜色加上透明度（例如 12%，即后置加上十六进制的 1f）
+              const baseColor = topic.color || '#6366f1';
+              const bgStyle = active 
+                ? { backgroundColor: `${baseColor}26`, borderColor: baseColor } 
+                : { backgroundColor: `${baseColor}0d`, borderColor: 'transparent' };
 
-            return (
-              <div
-                key={topic.id}
-                style={bgStyle}
-                className={`group border rounded-lg px-3 py-2.5 cursor-pointer transition-all ${
-                  active ? 'border font-medium shadow-sm' : 'hover:border-gray-200'
-                }`}
-                onClick={() => setSelectedTopicId(topic.id)}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: baseColor }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-800 truncate">{topic.name}</div>
-                  </div>
-                  <div className="text-xs text-gray-400 bg-white/60 px-1.5 py-0.5 rounded-full border border-gray-100">
-                    {topic.members?.length || 0} 人
+              return (
+                <div
+                  key={topic.id}
+                  style={bgStyle}
+                  className={`group border rounded-lg px-3 py-2.5 cursor-pointer transition-all ${
+                    active ? 'border font-medium shadow-sm' : 'hover:border-gray-200'
+                  }`}
+                  onClick={() => setSelectedTopicId(topic.id)}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: baseColor }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-800 truncate">{topic.name}</div>
+                    </div>
+                    <div className="text-xs text-gray-400 bg-white/60 px-1.5 py-0.5 rounded-full border border-gray-100">
+                      {topic.members?.length || 0} 人
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <Empty className="py-10" description="暂无主题" />
-      )}
+              );
+            })}
+          </div>
+        ) : (
+          <Empty className="py-10" description="暂无主题" />
+        )}
+      </div>
 
       <Modal
         title="管理主题分类"

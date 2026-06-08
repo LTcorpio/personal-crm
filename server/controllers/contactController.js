@@ -242,7 +242,7 @@ exports.deleteContact = async (req, res) => {
 // 4. 获取多层级标签树结构（供前端组件渲染）
 exports.getTagTree = async (req, res) => {
     try {
-        const allTags = await dbQuery(`SELECT * FROM tags`);
+        const allTags = await dbQuery(`SELECT * FROM tags ORDER BY sort_order ASC, id ASC`);
         
         const buildTree = (parentId) => {
             return allTags
@@ -258,6 +258,62 @@ exports.getTagTree = async (req, res) => {
         res.json(tree);
     } catch (error) {
         res.status(500).json({ error: "获取标签树失败" });
+    }
+};
+
+exports.updateTagsOrder = async (req, res) => {
+    const { tagIds } = req.body; // 接收当前层级排好序的 id 数组，如 [12, 5, 8]
+    if (!Array.isArray(tagIds)) {
+        return res.status(400).json({ success: false, message: "参数异常，tagIds 必须为数组" });
+    }
+    try {
+        await dbRun('BEGIN TRANSACTION');
+        for (const [index, id] of tagIds.entries()) {
+            await dbRun(`UPDATE tags SET sort_order = ? WHERE id = ?`, [index, id]);
+        }
+        await dbRun('COMMIT');
+        res.json({ success: true, message: "标签排序更新成功" });
+    } catch (error) {
+        await dbRun('ROLLBACK');
+        console.error("更新标签排序失败:", error);
+        res.status(500).json({ success: false, message: "后端排序保存失败" });
+    }
+};
+
+// === 安全级联删除标签（严格限制已被关联绑定的数据） ===
+exports.deleteTag = async (req, res) => {
+    const { id } = req.params;
+    try {
+        // 1. 深度遍历查询：获取当前标签及其所有下属子标签的 ID 集合
+        const allTags = await dbQuery(`SELECT id, parent_id FROM tags`);
+        const targetTagIds = [];
+        
+        const recurseCollect = (currentId) => {
+            targetTagIds.push(Number(currentId));
+            allTags.filter(t => t.parent_id === Number(currentId)).forEach(t => recurseCollect(t.id));
+        };
+        recurseCollect(id);
+
+        // 2. 检查人员关联关系：如果在这一棵子树中任意标签绑定了联系人，则禁止删除
+        const placeholders = targetTagIds.map(() => '?').join(',');
+        const checkRelation = await dbQuery(`
+            SELECT COUNT(*) as count FROM contact_tags 
+            WHERE tag_id IN (${placeholders})
+        `, targetTagIds);
+
+        if (checkRelation[0].count > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `由于该标签或子标签下仍绑定有联系人，无法删除，请先调整人员标签` 
+            });
+        }
+
+        // 3. 安全删除：由于设置了外键约束 ON DELETE CASCADE，底层子标签会自动被级联清空
+        await dbRun(`DELETE FROM tags WHERE id = ?`, [id]);
+        res.json({ success: true, message: "标签及相关子层级已安全移除" });
+    } catch (error) {
+        console.error("删除标签失败:", error);
+        res.status(500).json({ success: false, message: "服务器内部删除失败" });
     }
 };
 
