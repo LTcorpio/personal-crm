@@ -11,7 +11,8 @@ import {
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import axios from 'axios';
+
+import { topicApi } from '../api/crmApi';
 
 // --- 单项主题排序组件 ---
 function SortableTopicItem({ topic, onEdit, onDelete }) {
@@ -28,7 +29,7 @@ function SortableTopicItem({ topic, onEdit, onDelete }) {
       style={style}
       className={`flex items-center gap-2 p-2 border border-gray-200 rounded-md bg-white mb-2 ${isDragging ? 'opacity-50' : ''}`}
     >
-      <div {...attributes} {...listeners} className="cursor-grab p-1 text-gray-400 hover:text-gray-600">
+      <div {...attributes} {...listeners} className="cursor-grab p-1 text-gray-400 hover:text-gray-600 active:cursor-grabbing">
         <HolderOutlined />
       </div>
       <div className="flex-1 min-w-0 font-medium text-sm text-gray-800 truncate">{topic.name}</div>
@@ -129,10 +130,7 @@ export default function TopicSidebar({
     const isChanged = originalIds !== currentIds;
     try {
       if (isChanged) {
-        await axios.put('http://localhost:15197/api/topics/order', {
-          topicIds: managedTopics.map(t => t.id)
-        });
-        
+        await topicApi.updateOrder(managedTopics.map(t => t.id));
         setTopics(managedTopics); 
       }
       setManageModalOpen(false);

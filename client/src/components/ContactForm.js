@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, Input, Select, Radio, Button, Popconfirm, Tag } from 'antd';
+import { Modal, Form, Input, Radio, Button, Popconfirm, Tag } from 'antd';
 import { MinusCircleOutlined, PlusOutlined, HolderOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
@@ -18,7 +18,7 @@ function DragRow({ id, children }) {
   return (
     <div ref={setNodeRef} style={style} className="flex gap-2 items-center mb-2 bg-purple-50/50 p-2 rounded">
       {/* 拖拽把手 */}
-      <div {...attributes} {...listeners} className="cursor-grab pr-1 pt-6 text-gray-400 hover:text-gray-600">
+      <div {...attributes} {...listeners} className="cursor-grab pr-1 pt-6 text-gray-400 hover:text-gray-600 active:cursor-grabbing">
         <HolderOutlined />
       </div>
       {children}

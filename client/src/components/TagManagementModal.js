@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Button, Breadcrumb, message, Space, Empty } from 'antd';
+import { Modal, Button, Breadcrumb, message, Space, Empty, Popconfirm } from 'antd';
 import { 
   ArrowUpOutlined, 
   ArrowDownOutlined, 
@@ -8,9 +8,8 @@ import {
   ArrowLeftOutlined,
   HomeOutlined 
 } from '@ant-design/icons';
-import axios from 'axios';
 
-const API_BASE = 'http://localhost:15197/api';
+import { tagApi } from '../api/crmApi';
 
 export default function TagManagementModal({ visible, onClose, tagTree }) {
   // currentPath 存储下钻路线中的父辈节点对象数组
@@ -48,7 +47,7 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
     
     try {
       const tagIds = newList.map(item => item.id);
-      await axios.put(`${API_BASE}/tags/order`, { tagIds });
+      await tagApi.updateOrder(tagIds);
       message.success('排序已同步');
       setCurrentList(newList);
     } catch (err) {
@@ -59,7 +58,7 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
   // 处理安全删除逻辑
   const handleDelete = async (id) => {
     try {
-      const res = await axios.delete(`${API_BASE}/tags/${id}`);
+      const res = await tagApi.delete(id);
       if (res.data.success) {
         message.success(res.data.message || '标签删除成功');
         setCurrentList(prev => prev.filter(item => item.id !== id));
@@ -191,15 +190,23 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
                       />
                     </div>
 
-                    {/* 破坏性删除操作 */}
-                    <Button
-                      size="small"
-                      danger
-                      type="text"
-                      icon={<DeleteOutlined />}
-                      onClick={() => handleDelete(item.id)}
-                      className="hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-md"
-                    />
+                    {/* 气泡确认破坏性删除操作 */}
+                    <Popconfirm
+                      title="确认彻底删除该标签吗？"
+                      description="若标签下包含联系人，删除可能会受到系统限制。"
+                      onConfirm={() => handleDelete(item.id)}
+                      okText="确认"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <Button
+                        size="small"
+                        danger
+                        type="text"
+                        icon={<DeleteOutlined />}
+                        className="hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-md"
+                      />
+                    </Popconfirm>
                   </Space>
                 </div>
               ))}

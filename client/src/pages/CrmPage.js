@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, message, Spin, Empty, Tag, Modal, Layout, FloatButton, Pagination } from 'antd';
 import { SettingOutlined, RightOutlined } from '@ant-design/icons';
 import ColumnSetting, { DEFAULT_COLUMNS } from '../components/ColumnSetting';
-import axios from 'axios';
 import ContactCard from '../components/ContactCard';
 import ContactMiniCard from '../components/ContactMiniCard';
 import ContactForm from '../components/ContactForm';
@@ -15,9 +14,9 @@ import TopicSidebar from '../components/TopicSidebar';
 
 import { filterContacts, enrichTreeWithCounts } from '../utils/crmUtils';
 import { useResizableSider } from '../hooks/useResizableSider';
+import { contactApi, tagApi, topicApi } from '../api/crmApi';
 
 const { Content, Sider } = Layout;
-const API_BASE = 'http://localhost:15197/api';
 
 export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVisible, setFormVisible, editingContact, setEditingContact }) {
   const [contacts, setContacts] = useState([]);
@@ -30,7 +29,10 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   const [tagManageVisible, setTagManageVisible] = useState(false);
   // 分页状态管理
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem('crm_page_size');
+    return saved ? parseInt(saved, 10) : 20; // 默认 20 条
+  });
   
   // 列表模式下的列设置
   const [columnConfigs, setColumnConfigs] = useState(() => {
@@ -68,11 +70,11 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/contacts`);
+      const res = await contactApi.getAll();
       setContacts(res.data);
-      const tagRes = await axios.get(`${API_BASE}/tags/tree`);
+      const tagRes = await tagApi.getTree();
       setTagTree(tagRes.data);
-      const topicRes = await axios.get(`${API_BASE}/topics`);
+      const topicRes = await topicApi.getAll();
       setTopics(topicRes.data);
     } catch (err) {
       message.error('无法同步后端数据，请检查服务是否开启');
@@ -112,7 +114,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   // 新增与修改联系人
   const handleSaveContact = async (fullData) => {
     try {
-      await axios.post(`${API_BASE}/contacts`, fullData);
+      await contactApi.save(fullData);
       message.success('联系人数据保存成功');
       setFormVisible(false);
       setEditingContact(null);
@@ -125,7 +127,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   // 删除联系人
   const handleDeleteContact = async (id) => {
     try {
-      await axios.delete(`${API_BASE}/contacts/${id}`);
+      await contactApi.delete(id);
       message.success('删除成功');
       fetchData();
     } catch (err) {
@@ -136,8 +138,8 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   const handleSaveTopic = async (topicId, data) => {
     try {
       const res = topicId
-        ? await axios.put(`${API_BASE}/topics/${topicId}`, data)
-        : await axios.post(`${API_BASE}/topics`, data);
+        ? await topicApi.update(topicId, data)
+        : await topicApi.create(data);
 
       message.success(topicId ? '主题已更新' : '主题已创建');
       await fetchData();
@@ -153,7 +155,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
 
   const handleDeleteTopic = async (topicId) => {
     try {
-      await axios.delete(`${API_BASE}/topics/${topicId}`);
+      await topicApi.delete(topicId);
       message.success('主题已删除');
       if (selectedTopicId === topicId) {
         setSelectedTopicId(null);
@@ -273,6 +275,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         
         {/* 右侧：搜索框与联系人展示区 */}
         <Content className="flex-1 min-w-0 flex flex-col h-full bg-gray-50/50">
+          {/* 搜索组件 */}
           <SearchFilter 
             searchTxt={searchTxt}
             setSearchTxt={setSearchTxt}
@@ -296,6 +299,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
             </div>
           )}
 
+          {/* 联系人展示区 */}
           <div id="crm-content" className="flex-1 overflow-y-auto p-6">
             {loading ? (
               <div className="flex justify-center items-center py-24"><Spin size="large" description="加载中..." /></div>
@@ -358,6 +362,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
             )}
           </div>
 
+          {/* 底部状态栏 - 当前主题、分页器 */}
           <div className="bg-white px-6 py-3 border-t border-gray-100 flex items-center justify-between text-gray-500 shrink-0 select-none">
             <div className="flex items-center">
               <span className="mr-2">{crmFeatureMode === 'topics' ? '当前主题:' : '当前标签:'}</span>
@@ -413,9 +418,10 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                   onChange={(page, size) => {
                     setCurrentPage(page);
                     setPageSize(size);
+                    localStorage.setItem('crm_page_size', String(size));
                   }}
                   showSizeChanger
-                  pageSizeOptions={['20', '40', '60', '80']}
+                  pageSizeOptions={Array.from({ length: 20 }, (_, i) => String((i + 1) * 5))}
                 />
               )}
               {/* 筛选记录数 */}

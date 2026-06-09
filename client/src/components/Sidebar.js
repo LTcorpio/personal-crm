@@ -17,7 +17,6 @@ export default function Sidebar({ processedTagTree, selectedTagPath, setSelected
             icon={<SettingOutlined />} 
             type="text" 
             size="small" 
-            className="text-gray-700 shrink-0" 
             onClick={onManageTags}
             title="管理标签"
           >
