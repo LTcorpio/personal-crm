@@ -86,10 +86,10 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
       return {
         key: node.id,
         title: isLast ? (
-          // 最后一级：官方标准纯文本高亮
+          // 最后一级
           <span>{node.name}</span>
         ) : (
-          // 中间级：官方标准可点击链接
+          // 中间级
           <a onClick={(e) => { e.preventDefault(); setCurrentPath(prev => prev.slice(0, idx + 1)); }}>
             {node.name}
           </a>
@@ -113,20 +113,17 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
       className='select-none'
     >
       <div className="flex flex-col gap-4 pt-2 select-none">
-        
         {/* 上方面包屑导航栏与回溯控制 */}
         <div className="flex items-center gap-3 bg-gray-50/80 p-3 rounded-xl border border-gray-100">
-          {currentPath.length > 0 && (
-            <Button
-              size="small"
-              icon={<ArrowLeftOutlined />}
-              onClick={() => setCurrentPath(prev => prev.slice(0, -1))}
-              className="flex items-center text-xs"
-            >
-              返回上级
-            </Button>
-          )}
-          {/* 使用官方完整的 items 结构 */}
+          <Button
+            size="small"
+            icon={<ArrowLeftOutlined />}
+            onClick={() => setCurrentPath(prev => prev.slice(0, -1))}
+            className="flex items-center text-xs"
+            disabled={!currentPath.length}
+          >
+            返回上级
+          </Button>
           <Breadcrumb items={breadcrumbItems} className="flex items-center" />
         </div>
 
@@ -158,16 +155,16 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
                   {/* 右侧操作交互区 */}
                   <Space size="middle" className="shrink-0">
                     {/* 下钻穿透触点 */}
-                    <Button
+                    {item.children.length !== 0 && <Button
                       size="small"
                       type="text"
                       icon={<FolderOpenOutlined />}
                       disabled={!item.children || item.children.length === 0}
                       onClick={() => setCurrentPath(prev => [...prev, { id: item.id, name: item.name }])}
-                      className="text-xs text-gray-600 hover:text-gray-900 disabled:opacity-40"
+                      className="text-gray-600"
                     >
-                      进入下级
-                    </Button>
+                      下一级
+                    </Button>}
 
                     {/* 排序微调按钮组 */}
                     <div className="flex items-center bg-gray-50 rounded-md p-0.5 border border-gray-100">

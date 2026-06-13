@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card, Tabs, Radio, Button, Input, Checkbox, Row, Col, Space, Typography } from 'antd';
-import { UndoOutlined, DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { UndoOutlined, DeleteOutlined } from '@ant-design/icons';
 import relationship from 'relationship.js';
 
 const { TextArea } = Input;

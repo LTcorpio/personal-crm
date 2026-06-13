@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Button, message, Spin, Empty, Tag, Modal, Layout, FloatButton, Pagination } from 'antd';
-import { SettingOutlined, RightOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Button, message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Checkbox, Radio, Flex } from 'antd';
+import { SettingOutlined } from '@ant-design/icons';
 import ColumnSetting, { DEFAULT_COLUMNS } from '../components/ColumnSetting';
 import ContactCard from '../components/ContactCard';
 import ContactMiniCard from '../components/ContactMiniCard';
 import ContactForm from '../components/ContactForm';
 import ContactListTable from '../components/ContactListTable';
-import Sidebar from '../components/Sidebar';
+import Sidebar, { SidebarTitle, SidebarExtra } from '../components/Sidebar';
 import TagManagementModal from '../components/TagManagementModal';
 import SearchFilter from '../components/SearchFilter';
 import CrmStatsView from '../components/CrmStatsView';
-import TopicSidebar from '../components/TopicSidebar';
+// import TopicSidebar from '../components/TopicSidebar';
+import CrmBottomBar from '../components/CrmBottomBar';
 
 import { filterContacts, enrichTreeWithCounts } from '../utils/crmUtils';
 import { useResizableSider } from '../hooks/useResizableSider';
@@ -27,12 +28,46 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   const [searchTxt, setSearchTxt] = useState('');
   const [selectedTagPath, setSelectedTagPath] = useState(null);
   const [tagManageVisible, setTagManageVisible] = useState(false);
+  const sidebarRef = useRef(null);
+  
+  // 侧边栏折叠与响应式抽屉状态
+  const [siderCollapsed, setSiderCollapsed] = useState(false);
+  const [drawerSidebarVisible, setDrawerSidebarVisible] = useState(false);
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+
+  // 监听屏幕宽度变化以适应移动端/小视窗
+  useEffect(() => {
+    const handleResize = () => {
+      const small = window.innerWidth < 768;
+      setIsSmallScreen(small);
+      if (small) {
+        setSiderCollapsed(false); // 避免切回大屏时状态错乱
+      } else {
+        setDrawerSidebarVisible(false);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // 分页状态管理
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(() => {
     const saved = localStorage.getItem('crm_page_size');
-    return saved ? parseInt(saved, 10) : 20; // 默认 20 条
+    return saved ? parseInt(saved, 10) : 20;
   });
+
+  // 头像显示模式
+  const [showAvatarThumb, setShowAvatarThumb] = useState(() => {
+    const saved = localStorage.getItem('crm_show_avatar_thumb');
+    return saved !== 'false';
+  });
+  const [avatarFallbackType, setAvatarFallbackType] = useState(() => {
+    return localStorage.getItem('crm_avatar_fallback_type') || 'default';
+  });
+  const [avatarDrawerVisible, setAvatarDrawerVisible] = useState(false);
+  const avatarConfig = useMemo(() => ({ showAvatarThumb, avatarFallbackType }), [showAvatarThumb, avatarFallbackType]);
   
   // 列表模式下的列设置
   const [columnConfigs, setColumnConfigs] = useState(() => {
@@ -42,19 +77,18 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   const [settingVisible, setSettingVisible] = useState(false);
 
   // 侧边栏宽度
-  const { siderWidth, handleMouseDown } = useResizableSider(260, 200, 600);
+  const { siderWidth, handleMouseDown } = useResizableSider(260, 260, 600);
   
   // 搜索范围
   const [searchFields, setSearchFields] = useState(() => {
     const saved = localStorage.getItem('crm_search_fields');
     return saved ? JSON.parse(saved) : [];
   });
-  // 当搜索词或标签路径改变时，自动将页码重置回第 1 页
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTxt, selectedTagPath, selectedTopicId, searchFields, crmFeatureMode]);
   
-  // 查看联系人详情的 Modal 状态
   const [detailContact, setDetailContact] = useState(null);
 
   const handleColumnConfigsChange = (newConfigs) => {
@@ -89,20 +123,16 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
 
   useEffect(() => {
     if (crmFeatureMode !== 'topics') return;
-
     if (topics.length === 0) {
       setSelectedTopicId(null);
       return;
     }
-
     if (!topics.some(topic => topic.id === selectedTopicId)) {
       setSelectedTopicId(topics[0].id);
     }
   }, [crmFeatureMode, topics, selectedTopicId]);
 
-  // 处理点击关联人：通过 ID 查找联系人并展示详情弹窗
   const handleRelatedClick = (relatedId) => {
-    // 从所有人脉 contacts 中寻找（确保即使不在当前过滤结果里也能找到）
     const found = contacts.find(c => String(c.id) === String(relatedId));
     if (found) {
       setDetailContact(found);
@@ -111,7 +141,6 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
     }
   };
 
-  // 新增与修改联系人
   const handleSaveContact = async (fullData) => {
     try {
       await contactApi.save(fullData);
@@ -124,7 +153,6 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
     }
   };
 
-  // 删除联系人
   const handleDeleteContact = async (id) => {
     try {
       await contactApi.delete(id);
@@ -137,13 +165,9 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
 
   const handleSaveTopic = async (topicId, data) => {
     try {
-      const res = topicId
-        ? await topicApi.update(topicId, data)
-        : await topicApi.create(data);
-
+      const res = topicId ? await topicApi.update(topicId, data) : await topicApi.create(data);
       message.success(topicId ? '主题已更新' : '主题已创建');
       await fetchData();
-
       if (res.data?.topic?.id) {
         setSelectedTopicId(res.data.topic.id);
       }
@@ -169,7 +193,6 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   const selectedTopic = topics.find(topic => topic.id === selectedTopicId);
   const { topicContacts, unmatchedTopicMembers } = useMemo(() => {
     if (!selectedTopic) return { topicContacts: [], unmatchedTopicMembers: [] };
-
     const contactsById = new Map(contacts.map(contact => [String(contact.id), contact]));
     const contactsByName = new Map();
     contacts.forEach(contact => {
@@ -181,10 +204,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
     const unmatched = [];
 
     (selectedTopic.members || []).forEach(member => {
-      const contact = member.contactId
-        ? contactsById.get(String(member.contactId))
-        : contactsByName.get(member.name);
-
+      const contact = member.contactId ? contactsById.get(String(member.contactId)) : contactsByName.get(member.name);
       if (contact) {
         const key = String(contact.id);
         if (!seen.has(key)) {
@@ -195,7 +215,6 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         unmatched.push(member);
       }
     });
-
     return { topicContacts: matched, unmatchedTopicMembers: unmatched };
   }, [contacts, selectedTopic]);
 
@@ -204,14 +223,50 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
     ? filterContacts(activeContacts, searchTxt, searchFields, null)
     : filterContacts(activeContacts, searchTxt, searchFields, selectedTagPath);
 
-  // 计算当前页需要显示的数据切片
   const startIndex = (currentPage - 1) * pageSize;
   const pagedContacts = filteredContacts.slice(startIndex, startIndex + pageSize);
-
   const isLastPage = currentPage >= Math.ceil(filteredContacts.length / pageSize);
-
-  // 渲染前，动态生成带人数的树数据
   const processedTagTree = enrichTreeWithCounts(tagTree, contacts);
+
+  // 统一分发控制栏侧边面板折叠/展开行为
+  const handleToggleSider = () => {
+    if (isSmallScreen) {
+      setDrawerSidebarVisible(prev => !prev);
+    } else {
+      setSiderCollapsed(prev => !prev);
+    }
+  };
+
+  const handlePageChange = (page, size) => {
+    setCurrentPage(page);
+    setPageSize(size);
+    localStorage.setItem('crm_page_size', String(size));
+  };
+
+  const renderSidebarInner = (hideHeader = false) => (
+    <div 
+      style={{ width: isSmallScreen ? '100%' : siderWidth }} 
+      className="h-full flex flex-col shrink-0 overflow-hidden"
+    >
+      <Sidebar 
+        ref={sidebarRef}                     // 绑定唯一 ref
+        mode={crmFeatureMode}                // 传入模式：tags / topics
+        hideHeader={hideHeader}              // 隐藏标题栏-Drawer适配
+        // 标签所需属性
+        processedTagTree={processedTagTree}
+        selectedTagPath={selectedTagPath}
+        setSelectedTagPath={setSelectedTagPath}
+        onManageTags={() => setTagManageVisible(true)}
+        // 主题所需属性
+        topics={topics}
+        setTopics={setTopics}
+        selectedTopicId={selectedTopicId}
+        setSelectedTopicId={setSelectedTopicId}
+        onSaveTopic={handleSaveTopic}
+        onDeleteTopic={handleDeleteTopic}
+      />
+    </div>
+  );
 
   return (
     <>
@@ -223,59 +278,65 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         />
       ) : (
       <Layout className="max-w-[100vw] mx-auto bg-transparent flex flex-row relative h-full overflow-hidden">
-        {/* 左侧：常驻标签树导航面板 */}
-        <Sider
-          theme="light"
-          trigger={null}
-          width={siderWidth}
-          className="bg-white transition-none border-r border-gray-200"
-        >
-          {crmFeatureMode === 'topics' ? (
-            <TopicSidebar
-              topics={topics}
-              setTopics={setTopics}
-              selectedTopicId={selectedTopicId}
-              setSelectedTopicId={setSelectedTopicId}
-              onSaveTopic={handleSaveTopic}
-              onDeleteTopic={handleDeleteTopic}
-            />
-          ) : (
-            <Sidebar 
-              processedTagTree={processedTagTree}
+        
+        {/* 大屏模式下的常驻/可折叠 Sider */}
+        {!isSmallScreen && (
+          <Sider
+            theme="light"
+            trigger={null}
+            collapsible
+            collapsed={siderCollapsed}
+            collapsedWidth={0}
+            width={siderWidth}
+            className="bg-white transition-all duration-300 border-r border-gray-200 overflow-hidden"
+          >
+            {renderSidebarInner()}
+          </Sider>
+        )}
+
+        {/* 隐形拖拽条：非小屏且未收起时才渲染 */}
+        {!isSmallScreen && !siderCollapsed && (
+          <div
+            onMouseDown={handleMouseDown}
+            className="absolute top-0 bottom-0 cursor-col-resize group flex items-center justify-center transition-colors"
+            style={{
+              left: `${siderWidth}px`,
+              width: '8px',
+              marginLeft: '-4px',
+              zIndex: 50,
+            }}
+          >
+            <div className="w-[4px] h-full bg-transparent group-hover:bg-blue-500/40 group-hover:active:bg-blue-500/80 transition-all duration-200 ease-in-out" />
+          </div>
+        )}
+
+        {/* 小屏/移动端形态下的弹出式 Drawer 侧栏 */}
+        <Drawer
+          placement="left"
+          onClose={() => setDrawerSidebarVisible(false)}
+          open={isSmallScreen && drawerSidebarVisible}
+          size={480}
+          styles={{ body: { padding: 0 } }}
+          // 1. 动态对齐 Drawer 的标题栏，根据当前 crmFeatureMode 自动切换显示
+          title={<SidebarTitle mode={crmFeatureMode} />}
+          // 2. 动态分发 Drawer 的右侧功能区按钮
+          extra={
+            <SidebarExtra 
+              mode={crmFeatureMode}
               selectedTagPath={selectedTagPath}
               setSelectedTagPath={setSelectedTagPath}
               onManageTags={() => setTagManageVisible(true)}
+              onManageTopics={() => sidebarRef.current?.openManageModal()} // 👈 通过单 ref 直接唤起主题管理
             />
-          )}
-        </Sider>
-
-        {/* 隐形拖拽条，放置在 Sider 和 Content 的 gap 间隙正中间 */}
-        <div
-          onMouseDown={handleMouseDown}
-          className="absolute top-0 bottom-0 cursor-col-resize group flex items-center justify-center transition-colors"
-          style={{
-            left: `${siderWidth}px`, // 动态精准定位在侧边栏右侧边界
-            width: '8px',            // 鼠标交互热区宽度
-            marginLeft: '-4px',      // 居中对齐边界线
-            zIndex: 50,              // 确保置于最顶层
-          }}
+          }
+          className='select-none'
         >
-          {/* 内部高亮线条：平时透明，鼠标移入热区(group-hover)时显现 */}
-          <div className="w-[4px] h-full bg-transparent 
-            /* 1. 鼠标移入热区（Hover）：颜色变淡（使用 40% 不透明度） */
-            group-hover:bg-blue-500/40 
-            
-            /* 2. 鼠标按住拖动（Active）：颜色变深（使用 80% 不透明度） */
-            group-hover:active:bg-blue-500/80 
-            
-            /* 3. 伴有颜色（colors）和宽度/变形（all）的平滑过渡动画，时长 200 毫秒 */
-            transition-all duration-200 ease-in-out
-          " />
-        </div>
+          {/* 3. 传入 true 隐藏 Drawer 内部主体的原有头部，避免重复渲染 */}
+          {renderSidebarInner(true)}
+        </Drawer>
         
-        {/* 右侧：搜索框与联系人展示区 */}
+        {/* 右侧主视窗内容区 */}
         <Content className="flex-1 min-w-0 flex flex-col h-full bg-gray-50/50">
-          {/* 搜索组件 */}
           <SearchFilter 
             searchTxt={searchTxt}
             setSearchTxt={setSearchTxt}
@@ -299,13 +360,11 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
             </div>
           )}
 
-          {/* 联系人展示区 */}
           <div id="crm-content" className="flex-1 overflow-y-auto p-6">
             {loading ? (
               <div className="flex justify-center items-center py-24"><Spin size="large" description="加载中..." /></div>
             ) : filteredContacts.length > 0 ? (
               <>
-                {/* 1. 标准卡片模式 */}
                 {viewMode === 'card' && (
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-6">
                     {pagedContacts.map(item => (
@@ -314,11 +373,11 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                         contact={item}
                         onClick={() => { setEditingContact(item); setFormVisible(true); }}
                         onRelatedClick={handleRelatedClick}
+                        avatarConfig={avatarConfig}
                       />
                     ))}
                   </div>
                 )}
-                {/* 2. 微型卡片模式 (头像、姓名、性别、昵称) */}
                 {viewMode === 'mini' && (
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-4">
                     {pagedContacts.map(item => (
@@ -326,11 +385,11 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                         key={item.id}
                         contact={item}
                         onClick={() => setDetailContact(item)}
+                        avatarConfig={avatarConfig}
                       />
                     ))}
                   </div>
                 )}
-                {/* 3. 列表表格模式 */}
                 {viewMode === 'list' && (
                   <ContactListTable
                     dataSource={pagedContacts}
@@ -339,18 +398,16 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                     setEditingContact={setEditingContact}
                     setFormVisible={setFormVisible}
                     handleDeleteContact={handleDeleteContact}
+                    avatarConfig={avatarConfig}
                   />
                 )}
-                {/* 触底提示 */}
                 <div className="text-center text-gray-400 text-xs mt-8 pb-4 select-none tracking-wide font-sans">
                   {isLastPage ? (
                     <span>— 这是最后一页了 —</span>
                   ) : (
                     <span
                       className="text-blue-400/80 cursor-pointer hover:text-blue-500 transition-colors"
-                      onClick={() => {
-                        setCurrentPage(prev => prev + 1);
-                      }}
+                      onClick={() => setCurrentPage(prev => prev + 1)}
                     >
                       — 点击查看下一页 —
                     </span>
@@ -362,81 +419,23 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
             )}
           </div>
 
-          {/* 底部状态栏 - 当前主题、分页器 */}
-          <div className="bg-white px-6 py-3 border-t border-gray-100 flex items-center justify-between text-gray-500 shrink-0 select-none">
-            <div className="flex items-center">
-              <span className="mr-2">{crmFeatureMode === 'topics' ? '当前主题:' : '当前标签:'}</span>
-              {crmFeatureMode === 'topics' ? (
-                <span 
-                  className="text-xs px-2 py-0.5 rounded-md border font-medium transition-all duration-200"
-                  style={{
-                    backgroundColor: `${selectedTopic?.color || '#6366f1'}1f`, 
-                    borderColor: selectedTopic?.color || '#6366f1',            
-                    color: selectedTopic?.color || '#6366f1',                  
-                  }}
-                >
-                  {selectedTopic?.name || '未选择主题'}
-                </span>
-              ) : selectedTagPath && selectedTagPath !== '__NO_TAGS__' ? (
-                <span className="text-xs bg-blue-50 text-blue-400 px-2 py-0.5 rounded-md border border-blue-100 flex items-center flex-wrap gap-y-1">
-                  {selectedTagPath.split('/').map((tag, index, arr) => {
-                    const isLast = index === arr.length - 1;
-                    return (
-                      <span key={index} className="flex items-center">
-                        <span className={isLast ? "font-bold text-blue-700" : "text-blue-700/80"}>
-                          {tag}
-                        </span>
-                        {!isLast && (
-                          <span className="mx-1 text-blue-700/30 font-normal">
-                            <RightOutlined />
-                          </span>
-                        )}
-                      </span>
-                    );
-                  })}
-                </span>
-              ) : selectedTagPath === '__NO_TAGS__' ? (
-                <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-100 font-medium">
-                  无标签人员
-                </span>
-              ) : (
-                <span className="text-xs bg-gray-50 text-gray-600 px-2 py-0.5 rounded border border-gray-200">
-                  全部
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* 分页器 */}
-              {filteredContacts.length > 0 && (
-                <Pagination
-                  size='small'
-                  simple
-                  current={currentPage}
-                  pageSize={pageSize}
-                  total={filteredContacts.length}
-                  onChange={(page, size) => {
-                    setCurrentPage(page);
-                    setPageSize(size);
-                    localStorage.setItem('crm_page_size', String(size));
-                  }}
-                  showSizeChanger
-                  pageSizeOptions={Array.from({ length: 20 }, (_, i) => String((i + 1) * 5))}
-                />
-              )}
-              {/* 筛选记录数 */}
-              <div className="font-mono text-gray-400 bg-gray-50 px-2 py-1 rounded-xl border border-gray-100 text-sm">
-                人数: <span className="text-blue-600 font-bold">{filteredContacts.length}</span>
-                <span className="mx-1 text-gray-300">/</span>
-                <span className="text-gray-500">{crmFeatureMode === 'topics' ? topicContacts.length : contacts.length}</span>
-              </div>
-            </div>
-          </div>
+          <CrmBottomBar
+            crmFeatureMode={crmFeatureMode}
+            selectedTopic={selectedTopic}
+            selectedTagPath={selectedTagPath}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            filteredContactsCount={filteredContacts.length}
+            activeContactsCount={topicContacts.length}
+            totalContactsCount={contacts.length}
+            onPageChange={handlePageChange}
+            siderCollapsed={isSmallScreen ? drawerSidebarVisible : siderCollapsed}
+            onToggleSider={handleToggleSider}
+          />
         </Content>
       </Layout>
       )}
 
-      {/* 弹窗 - 编辑信息 */}
       <ContactForm 
         visible={formVisible} 
         contact={editingContact} 
@@ -444,16 +443,12 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         onSave={handleSaveContact} 
         onDelete={handleDeleteContact}
       />
-      
-      {/* 弹窗 - 列设置 */}
       <ColumnSetting
         visible={settingVisible}
         columns={columnConfigs}
         onClose={() => setSettingVisible(false)}
         onSave={handleColumnConfigsChange}
       />
-
-      {/* 弹窗 - 联系人详情卡片 */}
       <Modal
         title={
           <div className="flex items-center justify-between pr-6">
@@ -484,27 +479,41 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
               }}
               onRelatedClick={handleRelatedClick}
               noBorder={true}
+              avatarConfig={avatarConfig}
             />
           </div>
         )}
       </Modal>
-
-      {/* 弹窗 - 标签管理 */}
       <TagManagementModal
         visible={tagManageVisible}
-        onClose={() => {
-          setTagManageVisible(false);
-          fetchData(); // 关闭弹窗时自动同步最新标签树和人员变动计数
-        }}
+        onClose={() => { setTagManageVisible(false); fetchData(); }}
         tagTree={tagTree}
       />
+      <FloatButton.Group style={{ right: 24, bottom: 72 }}>
+        <FloatButton icon={<SettingOutlined />} tooltip="头像展示设置" onClick={() => setAvatarDrawerVisible(true)} />
+        <FloatButton.BackTop duration={300} visibilityHeight={150} target={() => document.getElementById('crm-content') || window} style={{ position: 'static' }} />
+      </FloatButton.Group>
 
-      <FloatButton.BackTop 
-        duration={300} // 回到顶部的动画时长（毫秒）
-        visibilityHeight={150} // 滚动到多高（像素）才显示该按钮
-        target={() => document.getElementById('crm-content') || window}
-        style={{ right: 24, bottom: 72 }} // 调整在右下角的位置
-      />
+      <Drawer title="头像展示全局配置" placement="bottom" height={200} onClose={() => setAvatarDrawerVisible(false)} open={avatarDrawerVisible} destroyOnClose>
+        <div className="max-w-md mx-auto select-none">
+          <Flex vertical gap="middle">
+            <Flex align="center" justify="space-between" className="py-1">
+              <span className="font-medium text-gray-800">头像缩略图</span>
+              <Checkbox checked={showAvatarThumb} onChange={(e) => { setShowAvatarThumb(e.target.checked); localStorage.setItem('crm_show_avatar_thumb', String(e.target.checked)); }}>
+                显示真实头像
+              </Checkbox>
+            </Flex>
+            <Flex align="center" justify="space-between" className="py-1">
+              <span className="font-medium text-gray-800">未渲染时兜底</span>
+              <Radio.Group value={avatarFallbackType} buttonStyle="solid" optionType="button" onChange={(e) => { setAvatarFallbackType(e.target.value); localStorage.setItem('crm_avatar_fallback_type', e.target.value); }}>
+                <Radio value="default">默认占位</Radio>
+                <Radio value="lastname">姓氏</Radio>
+                <Radio value="fullname">全名</Radio>
+              </Radio.Group>
+            </Flex>
+          </Flex>
+        </div>
+      </Drawer>
     </>
   );
 }

@@ -1,8 +1,11 @@
-// src/api/crmApi.js
 import axios from 'axios';
 
+const currentHostname = window.location.hostname;
+const BACKEND_PORT = process.env.REACT_APP_BACKEND_PORT;
+const baseURL = `http://${currentHostname}:${BACKEND_PORT}/api`;
+
 const api = axios.create({
-  baseURL: 'http://localhost:15197/api', // 统一维护的 API 根路径
+  baseURL: baseURL,
 });
 
 export const contactApi = {

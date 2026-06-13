@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export function useResizableSider(defaultWidth = 260, minWidth = 200, maxWidth = 600) {
+export function useResizableSider(defaultWidth, minWidth, maxWidth) {
   const [siderWidth, setSiderWidth] = useState(() => {
     const savedWidth = localStorage.getItem('crm_sider_width');
     return savedWidth ? parseInt(savedWidth, 10) : defaultWidth;

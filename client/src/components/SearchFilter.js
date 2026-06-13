@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Input, Checkbox, Popover, Button, Space, Pagination } from 'antd';
-import { RightOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons';
+import { Input, Checkbox, Popover, Button, Space } from 'antd';
+import { FilterOutlined, SearchOutlined } from '@ant-design/icons';
 
 // 完整的可查选项映射
 const OPTIONS = [
@@ -112,7 +112,7 @@ export default function SearchFilter({
 
   return (
     <div className="bg-white p-4 border-b border-gray-100 shrink-0">
-      <div className="flex gap-4 items-center w-full">
+      <div className="flex gap-2 items-center w-full">
         <Input
           placeholder="输入关键字，回车或点击搜索..."
           value={tempSearchTxt}
@@ -144,7 +144,7 @@ export default function SearchFilter({
           overlayClassName="search-filter-popover"
         >
           <Button 
-            icon={<SettingOutlined />} 
+            icon={<FilterOutlined />} 
             size='large'
           >
             搜索范围 {searchFields.length < OPTIONS.length && `(${searchFields.length})`}

@@ -1,22 +1,35 @@
 import React from 'react';
-import { Avatar, Tag } from 'antd';
+import { Tag } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
 
-export default function ContactMiniCard({ contact, onClick }) {
+export default function ContactMiniCard({ contact, onClick, avatarConfig }) {
   const { face_thumb_url, name, gender, title } = contact;
+  const showThumb = avatarConfig?.showAvatarThumb !== false && face_thumb_url;
+  const isTextFallback = !showThumb && avatarConfig?.avatarFallbackType && avatarConfig.avatarFallbackType !== 'default';
 
   return (
     <div 
       onClick={onClick}
       className="p-2 rounded-xl flex flex-col items-center text-center gap-3 cursor-pointer hover:bg-slate-100 transition-colors"
     >
-      {/* 1. 头像在上 */}
+      {/* 头像 */}
       <div className="flex-shrink-0">
-        {face_thumb_url ? (
-          <img src={face_thumb_url} alt={name} className="w-14 h-14 rounded-full object-cover" />
-        ) : (
-          <Avatar icon={<UserOutlined />} size={56} />
-        )}
+        <div className={`w-14 h-14 rounded-full flex items-center justify-center overflow-hidden border select-none ${
+          isTextFallback ? 'bg-blue-50 border-blue-200' : 'bg-gray-100 border-gray-200'
+        }`}>
+          {(() => {
+            if (showThumb) {
+              return <img src={face_thumb_url} alt={name} className="w-full h-full object-cover" />;
+            }
+            if (avatarConfig?.avatarFallbackType === 'lastname' && name) {
+              return <span className="text-[24px] font-bold text-blue-600">{name.charAt(0)}</span>;
+            }
+            if (avatarConfig?.avatarFallbackType === 'fullname' && name) {
+              return <span className="text-[14px] font-bold text-blue-600 px-1 text-center w-full">{name}</span>;
+            }
+            return <UserOutlined className="text-xl text-gray-400" />;
+          })()}
+        </div>
       </div>
 
       {/* 信息区域：姓名、性别、称呼 */}

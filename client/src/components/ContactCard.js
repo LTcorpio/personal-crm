@@ -1,9 +1,9 @@
 import React from 'react';
-import { Card, Tag, Tooltip, Collapse, Popconfirm } from 'antd';
-import { UserOutlined, PhoneOutlined, MailOutlined, EnvironmentOutlined, IdcardOutlined, WechatOutlined, QqOutlined, TikTokOutlined, QuestionCircleOutlined, CommentOutlined, LinkOutlined } from '@ant-design/icons';
+import { Card, Tag, Tooltip, Collapse } from 'antd';
+import { UserOutlined, PhoneOutlined, MailOutlined, EnvironmentOutlined, IdcardOutlined, WechatOutlined, QqOutlined, TikTokOutlined, QuestionCircleOutlined, CommentOutlined } from '@ant-design/icons';
 import Markdown from 'react-markdown';
 
-export default function ContactCard({ contact, onClick, noBorder = false, onRelatedClick }) {
+export default function ContactCard({ contact, onClick, noBorder = false, onRelatedClick, avatarConfig }) {
   // 从全路径标签中提取叶子节点的简写用于展示
   const getLeafTagName = (path) => path.split('/').pop();
 
@@ -56,6 +56,11 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
 
   const ageInfo = calculateAge(contact.birthday_solar, contact.deathday);
 
+  // 判断当前状态下是否展示缩略图
+  const showThumb = avatarConfig?.showAvatarThumb !== false && contact.face_thumb_url;
+  // 判断是否应用了文字后备样式
+  const isTextFallback = !showThumb && avatarConfig?.avatarFallbackType && avatarConfig.avatarFallbackType !== 'default';
+
   return (
     <Card
       hoverable={!noBorder}
@@ -68,13 +73,22 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
         className="flex items-start gap-4 mb-4 cursor-pointer"
         onClick={onClick}
       >
-        {/* 头像区域：若无 Immich 缩略图则显示默认占位图 */}
-        <div className="w-16 h-16 rounded-full bg-gray-100 border border-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center">
-          {contact.face_thumb_url ? (
-            <img src={contact.face_thumb_url} alt={contact.name} className="w-full h-full object-cover" />
-          ) : (
-            <UserOutlined className="text-2xl text-gray-400" />
-          )}
+        {/* 头像区域 */}
+        <div className={`w-16 h-16 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center select-none border ${
+          isTextFallback ? 'bg-blue-50 border-blue-200' : 'bg-gray-100 border-gray-200'
+        }`}>
+          {(() => {
+            if (showThumb) {
+              return <img src={contact.face_thumb_url} alt={contact.name} className="w-full h-full object-cover" />;
+            }
+            if (avatarConfig?.avatarFallbackType === 'lastname' && contact.name) {
+              return <span className="text-[28px] font-bold text-blue-600">{contact.name.charAt(0)}</span>;
+            }
+            if (avatarConfig?.avatarFallbackType === 'fullname' && contact.name) {
+              return <span className="text-[16px] font-bold text-blue-600 px-1 text-center w-full">{contact.name}</span>;
+            }
+            return <UserOutlined className="text-2xl text-gray-400" />;
+          })()}
         </div>
 
         {/* 基本姓名与基本标签 */}

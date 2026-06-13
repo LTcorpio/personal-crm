@@ -165,7 +165,7 @@ export default function CrmStatsView({ contacts, tagTree, onContactClick }) {
         <div className="bg-white border border-gray-100 rounded-lg shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
             <div>
-              <h2 className="m-0 text-base font-bold text-gray-800">生日日历图</h2>
+              <h2 className="m-0 text-base font-bold text-gray-800">{currentYear} 年 - 生日日历图</h2>
               <p className="m-0 mt-1 text-xs text-gray-400">按阳历生日统计每天的人数，点击月份名称查看详情</p>
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-400">
