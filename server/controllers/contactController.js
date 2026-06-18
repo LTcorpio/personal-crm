@@ -41,72 +41,269 @@ async function ensureTagPath(pathStr) {
     return parentId;
 }
 
-// 1. 创建或更新联系人
+// 1. 创建或更新联系人（加入精确差异比对，无修改不刷时间戳）
 exports.saveContact = async (req, res) => {
     const data = req.body;
-    // 如果没有传 id 则视为新增，生成一个简单随机 ID
-    const contactId = data.id || Math.random().toString(36).substring(2, 11).toUpperCase();
+    const contactId = data.id;
     
     try {
-        // 使用 SQLite 事务保证数据一致性
-        await dbRun('BEGIN TRANSACTION');
+        let isExisting = false;
+        let mainFieldsChanged = false;
+        let existingRows = [];
+        let formerNamesRows = [];
+        let methodsRows = [];
+        let relationsRows = [];
+        let oldTagIds = [];
+        let tagPaths = [];
 
-        // 插入或替换主表数据
-        await dbRun(`
-            INSERT INTO contacts (id, face_uuid, name, gender, ethnicity, native_place, title, birthday_solar, birthday_lunar, deathday, id_card, location, address, extra, remark)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                face_uuid=excluded.face_uuid, name=excluded.name, gender=excluded.gender, ethnicity=excluded.ethnicity, 
-                native_place=excluded.native_place, title=excluded.title, birthday_solar=excluded.birthday_solar, 
-                birthday_lunar=excluded.birthday_lunar, deathday=excluded.deathday, id_card=excluded.id_card, location=excluded.location, 
-                address=excluded.address, extra=excluded.extra, remark=excluded.remark
-        `, [
-            contactId, data.face_uuid || null, data.name, data.gender, data.ethnicity || null,
-            data.native_place || null, data.title || null, data.birthday_solar || null,
-            data.birthday_lunar || null, data.deathday || null, data.id_card || null, data.location || null,
-            data.address || null, data.extra || '', data.remark || ''
-        ]);
+        // === 1. 幂等与差异检查：如果传了 id，先检查数据是否真正发生了改变 ===
+        if (contactId) {
+            existingRows = await dbQuery(`SELECT * FROM contacts WHERE id = ?`, [contactId]);
+            if (existingRows.length > 0) {
+                isExisting = true;
+                const c = existingRows[0];
 
-        // 清理并重新插入曾用名
-        await dbRun(`DELETE FROM former_names WHERE contact_id = ?`, [contactId]);
-        if (data.former_name && Array.isArray(data.former_name)) {
-            for (const name of data.former_name) {
-                if(name) await dbRun(`INSERT INTO former_names (contact_id, name) VALUES (?, ?)`, [contactId, name]);
+                // 并行或顺序查出该人员当前所有的子表数据
+                formerNamesRows = await dbQuery(`SELECT name FROM former_names WHERE contact_id = ?`, [contactId]);
+                methodsRows = await dbQuery(`SELECT type, value FROM contact_methods WHERE contact_id = ?`, [contactId]);
+                // 此处获取自增主键 id 作为 pk，方便后续精准更新
+                relationsRows = await dbQuery(`SELECT id as pk, related_contact_id as id, related_name as name, relation, remark FROM contact_relations WHERE contact_id = ?`, [contactId]);
+                
+                const currentContactTags = await dbQuery(`SELECT tag_id FROM contact_tags WHERE contact_id = ?`, [contactId]);
+                oldTagIds = currentContactTags.map(row => row.tag_id);
+                
+                tagPaths = await getFullTagPaths(contactId);
+
+                // 规范化老数据结构
+                const oldContactMethods = { wechat: "", qq: "", email: "", tel: "", tiktok: "" };
+                methodsRows.forEach(m => {
+                    if (m.type in oldContactMethods) oldContactMethods[m.type] = m.value || "";
+                });
+
+                const oldSnapshot = {
+                    face_uuid: c.face_uuid || "",
+                    name: c.name || "",
+                    gender: c.gender !== null && c.gender !== undefined ? String(c.gender) : "",
+                    ethnicity: c.ethnicity || "",
+                    native_place: c.native_place || "",
+                    title: c.title || "",
+                    birthday_solar: c.birthday_solar || "",
+                    birthday_lunar: c.birthday_lunar || "",
+                    deathday: c.deathday || "",
+                    id_card: c.id_card || "",
+                    location: c.location || "",
+                    address: c.address || "",
+                    extra: c.extra || "",
+                    remark: c.remark || "",
+                    former_name: formerNamesRows.map(f => String(f.name)).sort(),
+                    contact: oldContactMethods,
+                    related: relationsRows.map(r => ({
+                        id: r.id || "",
+                        name: r.name || "",
+                        relation: r.relation || "",
+                        remark: r.remark || ""
+                    })).sort((a, b) => a.name.localeCompare(b.name) || a.relation.localeCompare(b.relation)),
+                    tag: tagPaths.map(String).sort()
+                };
+
+                // 规范化前端传来的新数据结构（补齐缺省值，防止因 undefined 或空字段误判为变动）
+                const newContactMethods = { wechat: "", qq: "", email: "", tel: "", tiktok: "" };
+                if (data.contact && typeof data.contact === 'object') {
+                    Object.keys(newContactMethods).forEach(k => {
+                        newContactMethods[k] = data.contact[k] || "";
+                    });
+                }
+
+                const newSnapshot = {
+                    face_uuid: data.face_uuid || "",
+                    name: data.name || "",
+                    gender: data.gender !== null && data.gender !== undefined ? String(data.gender) : "",
+                    ethnicity: data.ethnicity || "",
+                    native_place: data.native_place || "",
+                    title: data.title || "",
+                    birthday_solar: data.birthday_solar || "",
+                    birthday_lunar: data.birthday_lunar || "",
+                    deathday: data.deathday || "",
+                    id_card: data.id_card || "",
+                    location: data.location || "",
+                    address: data.address || "",
+                    extra: data.extra || "",
+                    remark: data.remark || "",
+                    former_name: (data.former_name || []).filter(Boolean).map(String).sort(),
+                    contact: newContactMethods,
+                    related: (data.related || []).map(r => ({
+                        id: r.id || r.contactId || "", // 兼容前端可能传入的 contactId
+                        name: r.name || "",
+                        relation: r.relation || "",
+                        remark: r.remark || ""
+                    })).sort((a, b) => a.name.localeCompare(b.name) || a.relation.localeCompare(b.relation)),
+                    tag: (data.tag || []).filter(Boolean).map(t => String(t).trim()).sort()
+                };
+
+                // 深度核心比对：如果字符串化后完全一致，说明用户未做任何修改，直接无视并返回成功
+                if (JSON.stringify(oldSnapshot) === JSON.stringify(newSnapshot)) {
+                    return res.json({ success: true, message: "资料未发生变更，无需保存", id: contactId });
+                }
+
+                // 检查主表核心文本字段是否发生实质性变动
+                const oldGenderStr = c.gender !== null && c.gender !== undefined ? String(c.gender) : "";
+                const newGenderStr = data.gender !== null && data.gender !== undefined ? String(data.gender) : "";
+                
+                mainFieldsChanged = 
+                    (c.face_uuid || "") !== (data.face_uuid || "") ||
+                    (c.name || "") !== (data.name || "") ||
+                    oldGenderStr !== newGenderStr ||
+                    (c.ethnicity || "") !== (data.ethnicity || "") ||
+                    (c.native_place || "") !== (data.native_place || "") ||
+                    (c.title || "") !== (data.title || "") ||
+                    (c.birthday_solar || "") !== (data.birthday_solar || "") ||
+                    (c.birthday_lunar || "") !== (data.birthday_lunar || "") ||
+                    (c.deathday || "") !== (data.deathday || "") ||
+                    (c.id_card || "") !== (data.id_card || "") ||
+                    (c.location || "") !== (data.location || "") ||
+                    (c.address || "") !== (data.address || "") ||
+                    (c.extra || "") !== (data.extra || "") ||
+                    (c.remark || "") !== (data.remark || "");
             }
         }
 
-        // 清理并重新插入联系方式
-        await dbRun(`DELETE FROM contact_methods WHERE contact_id = ?`, [contactId]);
+        // === 2. 实质性写入：数据确认有改变或为全新数据，执行数据库写入 ===
+        const finalContactId = contactId || Math.random().toString(36).substring(2, 11).toUpperCase();
+        
+        await dbRun('BEGIN TRANSACTION');
+
+        if (!isExisting) {
+            // 全新录入：直接插入主表
+            await dbRun(`
+                INSERT INTO contacts (id, face_uuid, name, gender, ethnicity, native_place, title, birthday_solar, birthday_lunar, deathday, id_card, location, address, extra, remark)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                finalContactId, data.face_uuid || null, data.name, data.gender, data.ethnicity || null,
+                data.native_place || null, data.title || null, data.birthday_solar || null,
+                data.birthday_lunar || null, data.deathday || null, data.id_card || null, data.location || null,
+                data.address || null, data.extra || '', data.remark || ''
+            ]);
+        } else if (mainFieldsChanged) {
+            // 已有记录且主表核心字段有变动：更新主表并刷新 updated_at
+            await dbRun(`
+                UPDATE contacts SET
+                    face_uuid=?, name=?, gender=?, ethnicity=?, native_place=?, title=?, 
+                    birthday_solar=?, birthday_lunar=?, deathday=?, id_card=?, location=?, 
+                    address=?, extra=?, remark=?, updated_at=CURRENT_TIMESTAMP
+                WHERE id = ?
+            `, [
+                data.face_uuid || null, data.name, data.gender, data.ethnicity || null,
+                data.native_place || null, data.title || null, data.birthday_solar || null,
+                data.birthday_lunar || null, data.deathday || null, data.id_card || null, data.location || null,
+                data.address || null, data.extra || '', data.remark || '', finalContactId
+            ]);
+        } // 注：如果仅仅修改了电话或标签，此处将完全略过主表更新，主表 updated_at 保持不变。
+
+        // 曾用名：精准集合差异化更新
+        const oldNames = formerNamesRows.map(f => String(f.name));
+        const newNames = (data.former_name || []).filter(Boolean).map(String);
+        const namesToDelete = oldNames.filter(n => !newNames.includes(n));
+        const namesToAdd = newNames.filter(n => !oldNames.includes(n));
+
+        for (const name of namesToDelete) {
+            await dbRun(`DELETE FROM former_names WHERE contact_id = ? AND name = ?`, [finalContactId, name]);
+        }
+        for (const name of namesToAdd) {
+            await dbRun(`INSERT INTO former_names (contact_id, name) VALUES (?, ?)`, [finalContactId, name]);
+        }
+
+        // 联系方式：精准子项比对与按需单条更新
+        const oldContactMethods = { wechat: "", qq: "", email: "", tel: "", tiktok: "" };
+        methodsRows.forEach(m => {
+            if (m.type in oldContactMethods) oldContactMethods[m.type] = m.value || "";
+        });
+        const newContactMethods = { wechat: "", qq: "", email: "", tel: "", tiktok: "" };
         if (data.contact && typeof data.contact === 'object') {
-            for (const [type, value] of Object.entries(data.contact)) {
-                if (value) {
-                    await dbRun(`INSERT INTO contact_methods (contact_id, type, value) VALUES (?, ?, ?)`, [contactId, type, value]);
+            Object.keys(newContactMethods).forEach(k => {
+                newContactMethods[k] = data.contact[k] || "";
+            });
+        }
+
+        for (const type of Object.keys(newContactMethods)) {
+            const oldVal = oldContactMethods[type];
+            const newVal = newContactMethods[type];
+            if (oldVal !== newVal) {
+                if (newVal === "") {
+                    // 新置空，说明删除了该项
+                    await dbRun(`DELETE FROM contact_methods WHERE contact_id = ? AND type = ?`, [finalContactId, type]);
+                } else if (oldVal === "") {
+                    // 老值为空，说明是新增
+                    await dbRun(`INSERT INTO contact_methods (contact_id, type, value) VALUES (?, ?, ?)`, [finalContactId, type, newVal]);
+                } else {
+                    // 两者都不为空且不相等，说明只是单条修改，更新单条并刷新该子项的 updated_at
+                    await dbRun(`UPDATE contact_methods SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE contact_id = ? AND type = ?`, [newVal, finalContactId, type]);
                 }
             }
         }
 
-        // 清理并重新插入关联人
-        await dbRun(`DELETE FROM contact_relations WHERE contact_id = ?`, [contactId]);
-        if (data.related && Array.isArray(data.related)) {
-            for (const rel of data.related) {
+        // 关联人关系：根据复合键作实体比对，并依据关联主键精准更新
+        const oldRelationsMap = new Map();
+        relationsRows.forEach(r => {
+            const key = `${r.id || ''}\t${r.name || ''}\t${r.relation || ''}`;
+            oldRelationsMap.set(key, r);
+        });
+
+        const newRelations = (data.related || []).map(r => ({
+            id: r.id || r.contactId || "",
+            name: r.name || "",
+            relation: r.relation || "",
+            remark: r.remark || ""
+        }));
+        const newRelationsKeys = new Set(newRelations.map(r => `${r.id}\t${r.name}\t${r.relation}`));
+
+        // 移除多余的关联
+        for (const [key, oldRow] of oldRelationsMap.entries()) {
+            if (!newRelationsKeys.has(key)) {
+                await dbRun(`DELETE FROM contact_relations WHERE id = ?`, [oldRow.pk]);
+            }
+        }
+        // 按需新增或单独更新单条备注
+        for (const newRel of newRelations) {
+            const key = `${newRel.id}\t${newRel.name}\t${newRel.relation}`;
+            if (oldRelationsMap.has(key)) {
+                const oldRow = oldRelationsMap.get(key);
+                // 仅当关联对象的备注发生改变时，单条更新
+                if ((oldRow.remark || "") !== newRel.remark) {
+                    await dbRun(`
+                        UPDATE contact_relations 
+                        SET remark = ?, updated_at = CURRENT_TIMESTAMP 
+                        WHERE id = ?
+                    `, [newRel.remark || '', oldRow.pk]);
+                }
+            } else {
+                // 全新关联项，正常插入
                 await dbRun(`
                     INSERT INTO contact_relations (contact_id, related_contact_id, related_name, relation, remark)
                     VALUES (?, ?, ?, ?, ?)
-                `, [contactId, rel.id || null, rel.name, rel.relation, rel.remark || '']);
+                `, [finalContactId, newRel.id || null, newRel.name, newRel.relation, newRel.remark || '']);
             }
         }
 
-        // 处理标签
-        await dbRun(`DELETE FROM contact_tags WHERE contact_id = ?`, [contactId]);
+        // 标签：精准关联差异计算
+        const newTagIds = [];
         if (data.tag && Array.isArray(data.tag)) {
             for (const tagPath of data.tag) {
                 const leafTagId = await ensureTagPath(tagPath);
-                await dbRun(`INSERT OR IGNORE INTO contact_tags (contact_id, tag_id) VALUES (?, ?)`, [contactId, leafTagId]);
+                if (leafTagId) newTagIds.push(leafTagId);
             }
+        }
+        const tagsToDelete = oldTagIds.filter(id => !newTagIds.includes(id));
+        const tagsToAdd = newTagIds.filter(id => !oldTagIds.includes(id));
+
+        for (const tagId of tagsToDelete) {
+            await dbRun(`DELETE FROM contact_tags WHERE contact_id = ? AND tag_id = ?`, [finalContactId, tagId]);
+        }
+        for (const tagId of tagsToAdd) {
+            await dbRun(`INSERT OR IGNORE INTO contact_tags (contact_id, tag_id) VALUES (?, ?)`, [finalContactId, tagId]);
         }
 
         await dbRun('COMMIT');
-        res.json({ success: true, message: "保存成功", id: contactId });
+        res.json({ success: true, message: "保存成功", id: finalContactId });
     } catch (error) {
         await dbRun('ROLLBACK');
         console.error(error);
@@ -128,7 +325,6 @@ exports.getContacts = async (req, res) => {
             params.push(id);
         }
         if (search) {
-            // 获取前端传过来的指定字段，例如 fields="name,remark"
             const { fields } = req.query;
             const allowedFields = [
                 'name', 'title', 'ethnicity', 'native_place', 'location', 
@@ -140,26 +336,20 @@ exports.getContacts = async (req, res) => {
                 ? fields.split(',').filter(f => allowedFields.includes(f))
                 : allowedFields;
 
-            // 防御：如果前端传了不支持的空数组，降级为默认查 name
             if (targetFields.length === 0) targetFields = ['name'];
 
-            // 遍历前端勾选的字段，动态构建 SQL 子句
             const searchConditions = [];
             targetFields.forEach(field => {
                 if (field === 'former_name') {
-                    // 曾用名子表查询
                     searchConditions.push(`EXISTS (SELECT 1 FROM former_names fn WHERE fn.contact_id = contacts.id AND fn.name LIKE ?)`);
                     params.push(`%${search}%`);
                 } else if (field === 'contact') {
-                    // 联系方式子表查询 (微信、QQ、手机等统一归为联系方式搜索)
                     searchConditions.push(`EXISTS (SELECT 1 FROM contact_methods cm WHERE cm.contact_id = contacts.id AND cm.value LIKE ?)`);
                     params.push(`%${search}%`);
                 } else if (field === 'related') {
-                    // 关联人子表查询
                     searchConditions.push(`EXISTS (SELECT 1 FROM contact_relations cr WHERE cr.contact_id = contacts.id AND cr.related_name LIKE ?)`);
                     params.push(`%${search}%`);
                 } else {
-                    // 主表常规文本字段
                     searchConditions.push(`contacts.${field} LIKE ?`);
                     params.push(`%${search}%`);
                 }
@@ -167,7 +357,6 @@ exports.getContacts = async (req, res) => {
             sql += ` AND (${searchConditions.join(' OR ')})`;
         }
 
-        // 标签筛选逻辑：如果传入标签，过滤绑定该标签（或其子标签）的联系人
         if (tag) {
             sql += ` AND id IN (
                 SELECT contact_id FROM contact_tags WHERE tag_id IN (
@@ -176,22 +365,21 @@ exports.getContacts = async (req, res) => {
             )`;
             params.push(tag);
         }
+        
+        if (!id) {
+            sql += ` ORDER BY created_at ASC`;
+        }
 
         const contacts = await dbQuery(sql, params);
         const result = [];
 
         for (const c of contacts) {
-            // 聚合曾用名
             const formerNamesRows = await dbQuery(`SELECT name FROM former_names WHERE contact_id = ?`, [c.id]);
-            // 聚合联系方式
             const methodsRows = await dbQuery(`SELECT type, value FROM contact_methods WHERE contact_id = ?`, [c.id]);
             const contactMethods = { wechat: "", qq: "", email: "", tel: "", tiktok: "" };
             methodsRows.forEach(m => contactMethods[m.type] = m.value);
 
-            // 聚合关联人
             const relationsRows = await dbQuery(`SELECT related_contact_id as id, related_name as name, relation, remark FROM contact_relations WHERE contact_id = ?`, [c.id]);
-            
-            // 获取标签全路径数组
             const tagPaths = await getFullTagPaths(c.id);
 
             result.push({
@@ -205,7 +393,7 @@ exports.getContacts = async (req, res) => {
                 ethnicity: c.ethnicity || "",
                 native_place: c.native_place || "",
                 title: c.title || "",
-                relationship: tagPaths.filter(p => p.startsWith("关系/")).map(p => p.split('/').pop()), // 视情况提取关系
+                relationship: tagPaths.filter(p => p.startsWith("关系/")).map(p => p.split('/').pop()),
                 birthday_solar: c.birthday_solar || "",
                 birthday_lunar: c.birthday_lunar || "",
                 deathday: c.deathday || "",
@@ -215,11 +403,12 @@ exports.getContacts = async (req, res) => {
                 contact: contactMethods,
                 related: relationsRows.map(r => ({...r, id: r.id || ""})),
                 extra: c.extra,
-                remark: c.remark
+                remark: c.remark,
+                created_at: c.created_at,
+                updated_at: c.updated_at
             });
         }
 
-        // 如果是查单个人直接返回对象，否则返回数组
         res.json(id ? (result[0] || null) : result);
 
     } catch (error) {
@@ -239,7 +428,7 @@ exports.deleteContact = async (req, res) => {
     }
 };
 
-// 4. 获取多层级标签树结构（供前端组件渲染）
+// 4. 获取多层级标签树结构
 exports.getTagTree = async (req, res) => {
     try {
         const allTags = await dbQuery(`SELECT * FROM tags ORDER BY sort_order ASC, id ASC`);
@@ -262,14 +451,14 @@ exports.getTagTree = async (req, res) => {
 };
 
 exports.updateTagsOrder = async (req, res) => {
-    const { tagIds } = req.body; // 接收当前层级排好序的 id 数组，如 [12, 5, 8]
+    const { tagIds } = req.body;
     if (!Array.isArray(tagIds)) {
         return res.status(400).json({ success: false, message: "参数异常，tagIds 必须为数组" });
     }
     try {
         await dbRun('BEGIN TRANSACTION');
         for (const [index, id] of tagIds.entries()) {
-            await dbRun(`UPDATE tags SET sort_order = ? WHERE id = ?`, [index, id]);
+            await dbRun(`UPDATE tags SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [index, id]);
         }
         await dbRun('COMMIT');
         res.json({ success: true, message: "标签排序更新成功" });
@@ -280,11 +469,10 @@ exports.updateTagsOrder = async (req, res) => {
     }
 };
 
-// === 安全级联删除标签（严格限制已被关联绑定的数据） ===
+// 安全级联删除标签
 exports.deleteTag = async (req, res) => {
     const { id } = req.params;
     try {
-        // 1. 深度遍历查询：获取当前标签及其所有下属子标签的 ID 集合
         const allTags = await dbQuery(`SELECT id, parent_id FROM tags`);
         const targetTagIds = [];
         
@@ -294,7 +482,6 @@ exports.deleteTag = async (req, res) => {
         };
         recurseCollect(id);
 
-        // 2. 检查人员关联关系：如果在这一棵子树中任意标签绑定了联系人，则禁止删除
         const placeholders = targetTagIds.map(() => '?').join(',');
         const checkRelation = await dbQuery(`
             SELECT COUNT(*) as count FROM contact_tags 
@@ -308,7 +495,6 @@ exports.deleteTag = async (req, res) => {
             });
         }
 
-        // 3. 安全删除：由于设置了外键约束 ON DELETE CASCADE，底层子标签会自动被级联清空
         await dbRun(`DELETE FROM tags WHERE id = ?`, [id]);
         res.json({ success: true, message: "标签及相关子层级已安全移除" });
     } catch (error) {
@@ -318,7 +504,6 @@ exports.deleteTag = async (req, res) => {
 };
 
 async function getTopicsWithMembers(topicId = null) {
-    // 排序改为优先按新增的 sort_order 升序
     const sql = `SELECT id, name, color, sort_order, created_at, updated_at FROM contact_topics ${topicId ? 'WHERE id = ?' : ''} ORDER BY sort_order ASC, created_at DESC, id DESC`;
     const topics = await dbQuery(sql, topicId ? [topicId] : []);
 
@@ -346,20 +531,50 @@ async function getTopicsWithMembers(topicId = null) {
     return result;
 }
 
+// 精准重构分类成员变动逻辑，防止盲目清空时间戳
 async function replaceTopicMembers(topicId, members = []) {
-    await dbRun(`DELETE FROM contact_topic_members WHERE topic_id = ?`, [topicId]);
-
-    for (const [index, member] of members.entries()) {
+    const oldMembers = await dbQuery(`SELECT id as pk, contact_id, name, sort_order, remark FROM contact_topic_members WHERE topic_id = ?`, [topicId]);
+    
+    const newMembers = members.map((member, index) => {
         const name = (member.name || '').trim();
         const contactId = (member.contactId || member.id || '').trim();
         const remark = (member.remark || '').trim();
+        return { name, contactId: contactId || null, sort_order: index, remark };
+    }).filter(m => m.name);
 
-        if (!name) continue;
+    const oldMembersMap = new Map();
+    oldMembers.forEach(m => {
+        const key = `${m.contact_id || ''}\t${m.name}`;
+        oldMembersMap.set(key, m);
+    });
 
-        await dbRun(`
-            INSERT INTO contact_topic_members (topic_id, contact_id, name, sort_order, remark)
-            VALUES (?, ?, ?, ?, ?)
-        `, [topicId, contactId || null, name, index, remark]);
+    const newMembersKeys = new Set(newMembers.map(m => `${m.contact_id || ''}\t${m.name}`));
+
+    // 删除已被移除的群组成员
+    for (const [key, oldRow] of oldMembersMap.entries()) {
+        if (!newMembersKeys.has(key)) {
+            await dbRun(`DELETE FROM contact_topic_members WHERE id = ?`, [oldRow.pk]);
+        }
+    }
+
+    // 按需添加或精准更新单条排序与备注
+    for (const newMem of newMembers) {
+        const key = `${newMem.contactId || ''}\t${newMem.name}`;
+        if (oldMembersMap.has(key)) {
+            const oldRow = oldMembersMap.get(key);
+            if (oldRow.sort_order !== newMem.sort_order || oldRow.remark !== newMem.remark) {
+                await dbRun(`
+                    UPDATE contact_topic_members 
+                    SET sort_order = ?, remark = ?, updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = ?
+                `, [newMem.sort_order, newMem.remark, oldRow.pk]);
+            }
+        } else {
+            await dbRun(`
+                INSERT INTO contact_topic_members (topic_id, contact_id, name, sort_order, remark)
+                VALUES (?, ?, ?, ?, ?)
+            `, [topicId, newMem.contactId, newMem.name, newMem.sort_order, newMem.remark]);
+        }
     }
 }
 
@@ -414,11 +629,18 @@ exports.updateTopic = async (req, res) => {
     try {
         await dbRun('BEGIN TRANSACTION');
 
-        await dbRun(`
-            UPDATE contact_topics
-            SET name = ?, color = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `, [topicName, color, id]);
+        const existingTopic = await dbQuery(`SELECT name, color FROM contact_topics WHERE id = ?`, [id]);
+        if (existingTopic.length > 0) {
+            const t = existingTopic[0];
+            // 只有主题自身属性变化时，才调整主题表的 updated_at
+            if (t.name !== topicName || t.color !== color) {
+                await dbRun(`
+                    UPDATE contact_topics
+                    SET name = ?, color = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                `, [topicName, color, id]);
+            }
+        }
 
         await replaceTopicMembers(id, members);
 
@@ -445,7 +667,7 @@ exports.deleteTopic = async (req, res) => {
     }
 };
 
-// 9. Immich 缩略图网络代理
+// 9. Immich 缩略图 network 代理
 exports.proxyFaceImage = async (req, res) => {
     const { uuid } = req.params;
     const immichUrl = `${process.env.IMMICH_BASE_URL}/api/people/${uuid}/thumbnail`;
@@ -468,14 +690,14 @@ exports.proxyFaceImage = async (req, res) => {
 
 // 10. 更新主题排序
 exports.updateTopicsOrder = async (req, res) => {
-    const { topicIds } = req.body; // 传入排好序的 id 数组，如 [3, 1, 2]
+    const { topicIds } = req.body;
     if (!Array.isArray(topicIds)) {
         return res.status(400).json({ success: false, message: "参数错误" });
     }
     try {
         await dbRun('BEGIN TRANSACTION');
         for (const [index, id] of topicIds.entries()) {
-            await dbRun(`UPDATE contact_topics SET sort_order = ? WHERE id = ?`, [index, id]);
+            await dbRun(`UPDATE contact_topics SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [index, id]);
         }
         await dbRun('COMMIT');
         res.json({ success: true, message: "排序更新成功" });

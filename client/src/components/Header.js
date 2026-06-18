@@ -69,10 +69,10 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
             buttonStyle="solid"
           >
             <Radio.Button value="crm"><TeamOutlined />
-              <span className='hidden xl:inline'>人脉管理</span>
+              <span className='hidden xl:inline ml-1.5'>人脉管理</span>
             </Radio.Button>
             <Radio.Button value="calculator"><CalculatorOutlined />
-              <span className='hidden xl:inline'>亲戚计算器</span>
+              <span className='hidden xl:inline ml-1.5'>亲戚计算器</span>
             </Radio.Button>
           </Radio.Group>
         </div>

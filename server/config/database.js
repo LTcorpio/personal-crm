@@ -1,12 +1,21 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 
-const dbPath = path.resolve(__dirname, '../crm.db');
+const defaultDbPath = path.resolve(__dirname, '../crm.db'); 
+const dbPath = process.env.DB_PATH || defaultDbPath;
+
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+    console.log(`已自动创建数据库目录: ${dbDir}`);
+}
+
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('数据库连接失败:', err.message);
     } else {
-        console.log('已连接到 SQLite 数据库');
+        console.log(`数据库成功连接，路径: ${dbPath}`);
     }
 });
 
@@ -32,7 +41,8 @@ db.serialize(() => {
             address TEXT,
             extra TEXT,
             remark TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     `);
 
@@ -43,6 +53,8 @@ db.serialize(() => {
             name TEXT NOT NULL,
             parent_id INTEGER,
             sort_order INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (parent_id) REFERENCES tags(id) ON DELETE CASCADE,
             UNIQUE(name, parent_id)
         )
@@ -54,6 +66,8 @@ db.serialize(() => {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             contact_id TEXT,
             tag_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
             FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
         )
@@ -65,6 +79,8 @@ db.serialize(() => {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             contact_id TEXT,
             name TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE
         )
     `);
@@ -72,10 +88,13 @@ db.serialize(() => {
     // 5. 联系方式表
     db.run(`
         CREATE TABLE IF NOT EXISTS contact_methods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             contact_id TEXT,
             type TEXT NOT NULL, -- 'wechat', 'qq', 'email', 'tel' 等
             value TEXT NOT NULL,
-            PRIMARY KEY (contact_id, type),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(contact_id, type),
             FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE
         )
     `);
@@ -89,6 +108,8 @@ db.serialize(() => {
             related_name TEXT NOT NULL, -- 名字
             relation TEXT NOT NULL,     -- 关系如 "父亲"
             remark TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
             FOREIGN KEY (related_contact_id) REFERENCES contacts(id) ON DELETE SET NULL
         )
@@ -106,7 +127,7 @@ db.serialize(() => {
         )
     `);
 
-    // 8. 主题-人员成员表。contact_id 可为空，便于先按姓名建立主题清单。
+    // 8. 主题-人员成员表
     db.run(`
         CREATE TABLE IF NOT EXISTS contact_topic_members (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,6 +136,8 @@ db.serialize(() => {
             name TEXT NOT NULL,
             sort_order INTEGER DEFAULT 0,
             remark TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (topic_id) REFERENCES contact_topics(id) ON DELETE CASCADE,
             FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL
         )
