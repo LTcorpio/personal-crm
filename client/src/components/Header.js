@@ -11,7 +11,8 @@ import {
   BarChartOutlined,
   ApartmentOutlined,
   QuestionCircleOutlined,
-  MenuOutlined
+  MenuOutlined,
+  UserSwitchOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -53,7 +54,7 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
       <div className="flex items-center gap-4 md:gap-6">
         <div className="flex items-center gap-2 md:gap-3 cursor-pointer" onClick={() => navigate('/')}>
           <div className="bg-blue-600 text-white w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center font-bold text-lg md:text-xl shadow-md shrink-0">
-            C
+            <TeamOutlined />
           </div>
           <h1 className="text-lg md:text-xl font-bold tracking-tight m-0 sm:block">
             个人 CRM 系统
@@ -68,7 +69,7 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
             optionType="button"
             buttonStyle="solid"
           >
-            <Radio.Button value="crm"><TeamOutlined />
+            <Radio.Button value="crm"><UserSwitchOutlined />
               <span className='hidden xl:inline ml-1.5'>人脉管理</span>
             </Radio.Button>
             <Radio.Button value="calculator"><CalculatorOutlined />
