@@ -107,6 +107,7 @@ export default function ContactListTable({
       pagination={false}
       className="bg-white rounded-xl border border-gray-100 overflow-hidden"
       columns={columns}
+      size='small'
     />
   );
 }

@@ -8,6 +8,47 @@ const api = axios.create({
   baseURL: baseURL,
 });
 
+// ==========================================
+// 1. 请求拦截器：自动注入 JWT Token
+// ==========================================
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('crm_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// ==========================================
+// 2. 响应拦截器：捕获鉴权失败 (401/403)
+// ==========================================
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // 如果是登录接口本身失败(401)，严禁执行页面刷新，否则提示信息会被刷新冲掉
+    const isLoginUrl = error.config?.url?.endsWith('/auth/login');
+
+    if (!isLoginUrl && error.response && (error.response.status === 401 || error.response.status === 403)) {
+      localStorage.removeItem('crm_token');
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
+
+// ==========================================
+// 3. 导出登录鉴权 API
+// ==========================================
+export const authApi = {
+  login: (password) => api.post('/auth/login', { password }),
+  changePassword: (oldPassword, newPassword) => api.post('/settings/update', { oldPassword, newPassword }),
+};
+
 export const contactApi = {
   getAll: () => api.get('/contacts'),
   save: (data) => api.post('/contacts', data),

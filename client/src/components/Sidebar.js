@@ -1,5 +1,5 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Tree, Button, Tooltip, ColorPicker, Empty, Form, Input, Modal, Popconfirm } from 'antd';
+import { Tree, Button, Tooltip, ColorPicker, Empty, Form, Input, Modal, Popconfirm, AutoComplete } from 'antd';
 import {
   ClearOutlined,
   SettingOutlined,
@@ -34,14 +34,70 @@ function SortableTopicItem({ topic, onEdit, onDelete }) {
   );
 }
 
-function SortableMemberItem({ field, remove }) {
+function SortableMemberItem({ field, remove, contacts, form }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: field.key });
+  
+  // 1. 建立联想下拉菜单的候选数据（注入唯一后缀，解决冲突核心）
+  const autoCompleteOptions = React.useMemo(() => {
+    return contacts.map(c => ({
+      // 将 value 拼接上 ID 确保全局唯一，彻底防止 AntD 内部 Key 覆盖引发的 Bug
+      value: `${c.name} #ID:${c.id}`,
+      id: String(c.id),
+      realName: c.name, // 留存一份纯净的名字供后续回填
+      label: (
+        <div className="flex justify-between items-center w-full">
+          <span className="font-medium text-gray-700">{c.name}</span>
+          <span className="text-gray-400 font-mono text-xs">ID: {c.id}</span>
+        </div>
+      )
+    }));
+  }, [contacts]);
+
+  // 2. 当用户从下拉列表中显式选择某人时触发
+  const handleSelect = (value, option) => {
+    form.setFieldValue(['members', field.name, 'contactId'], option.id);
+    form.setFieldValue(['members', field.name, 'name'], option.realName); // 强行将输入框改回纯净名字，不把后缀露给用户
+  };
+
+  // 3. 当用户打字、清空或选择导致输入框变更时触发
+  const handleChange = (value) => {
+    // 如果带有唯一标识后缀，说明是由点击下拉菜单触发的二次变更，直接解析并同步表单
+    if (value && value.includes(' #ID:')) {
+      const [realName, contactId] = value.split(' #ID:');
+      form.setFieldValue(['members', field.name, 'contactId'], contactId);
+      form.setFieldValue(['members', field.name, 'name'], realName);
+      return;
+    }
+
+    // 允许强健的边缘操作：如果手打的纯文本恰好完美卡中某人的名字，帮他自动锁上第一个匹配的 ID
+    const exactMatch = contacts.find(c => c.name === value);
+    form.setFieldValue(['members', field.name, 'contactId'], exactMatch ? String(exactMatch.id) : '');
+  };
+
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 999 : 'auto' }}
-      className={`grid grid-cols-[32px_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_32px] gap-2 items-center bg-gray-50/50 p-2 border border-gray-100 rounded-md ${isDragging ? 'opacity-50' : ''}`}>
+      className={`grid grid-cols-[32px_90px_minmax(0,1.5fr)_minmax(0,1fr)_32px] gap-2 items-center bg-gray-50/50 p-2 border border-gray-100 rounded-md ${isDragging ? 'opacity-50' : ''}`}>
       <div {...attributes} {...listeners} className="cursor-grab text-center text-gray-400 hover:text-gray-600"><HolderOutlined /></div>
-      <Form.Item name={[field.name, 'contactId']} className="mb-0"><Input placeholder="人物ID" /></Form.Item>
-      <Form.Item name={[field.name, 'name']} className="mb-0" rules={[{ required: true, message: '请输入姓名' }]}><Input placeholder="姓名" /></Form.Item>
+      
+      {/* 人物 ID 显示框 */}
+      <Form.Item name={[field.name, 'contactId']} className="mb-0">
+        <Input placeholder="未匹配" disabled className="text-center bg-gray-100/80 text-gray-400 font-mono text-xs border-dashed" />
+      </Form.Item>
+      
+      {/* 名字输入框重塑为过滤逻辑修正后的 AutoComplete */}
+      <Form.Item name={[field.name, 'name']} className="mb-0" rules={[{ required: true, message: '请输入姓名' }]}>
+        <AutoComplete
+          options={autoCompleteOptions}
+          onSelect={handleSelect}
+          onChange={handleChange}
+          placeholder="输入名字或下拉选择"
+          // 注意：过滤时要拿纯净的 realName 进行比对，避免带有 #ID 后缀干扰用户的正常输入检索
+          filterOption={(inputValue, option) =>
+            option.realName.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+          }
+        />
+      </Form.Item>
+      
       <Form.Item name={[field.name, 'remark']} className="mb-0"><Input placeholder="备注" /></Form.Item>
       <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(field.name)} />
     </div>
@@ -93,6 +149,7 @@ export function SidebarExtra({ mode, selectedTagPath, setSelectedTagPath, onMana
 const Sidebar = forwardRef(function Sidebar({
   mode, // 'tags' 或 'topics'
   hideHeader = false,
+  contacts = [],
   // 标签相关属性
   processedTagTree = [], selectedTagPath, setSelectedTagPath, onManageTags,
   // 主题相关属性
@@ -154,7 +211,12 @@ const Sidebar = forwardRef(function Sidebar({
       await onSaveTopic(editingTopic?.id, {
         name: values.name,
         color: typeof values.color === 'object' ? values.color.toHexString() : values.color,
-        members: (values.members || []).map(m => ({ contactId: m.contactId || '', name: m.name || '', remark: m.remark || '' }))
+        members: (values.members || []).map(m => ({ 
+          id: m.id || null, 
+          contactId: m.contactId || '', 
+          name: m.name || '', 
+          remark: m.remark || '' 
+        }))
       });
       setModalOpen(false);
     } catch (err) { console.log(err); } finally { setSaving(false); }
@@ -289,7 +351,15 @@ const Sidebar = forwardRef(function Sidebar({
                       if (e.over && e.active.id !== e.over.id) move(fields.findIndex(f => f.key === e.active.id), fields.findIndex(f => f.key === e.over.id))
                     }}>
                     <SortableContext items={fields.map(f => f.key)} strategy={verticalListSortingStrategy}>
-                      {fields.map(field => <SortableMemberItem key={field.key} field={field} remove={remove} />)}
+                      {fields.map(field => (
+                        <SortableMemberItem 
+                          key={field.key} 
+                          field={field} 
+                          remove={remove} 
+                          contacts={contacts} // 👈 传进去用来解析联想列表
+                          form={form}         // 👈 传进去用于动态修改对应的联动的字段
+                        />
+                      ))}
                     </SortableContext>
                   </DndContext>
                 </div>

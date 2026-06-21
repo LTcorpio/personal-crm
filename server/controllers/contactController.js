@@ -1,6 +1,5 @@
 const { db, dbQuery, dbRun } = require('../config/database');
 const axios = require('axios');
-const { crypto } = require('crypto');
 
 // 工具函数：递归或拼装全路径标签 (例如将 标签ID 转为 "同学/大学同学/智能1班")
 async function getFullTagPaths(contactId) {
@@ -531,45 +530,55 @@ async function getTopicsWithMembers(topicId = null) {
     return result;
 }
 
-// 精准重构分类成员变动逻辑，防止盲目清空时间戳
+// 精准重构分类成员变动逻辑，使用记录自身的自增主键 id 作差异比对
 async function replaceTopicMembers(topicId, members = []) {
+    // 1. 获取当前数据库中该主题已存在的所有成员记录
     const oldMembers = await dbQuery(`SELECT id as pk, contact_id, name, sort_order, remark FROM contact_topic_members WHERE topic_id = ?`, [topicId]);
     
+    // 2. 规范化前端传入的数据，同时强转 String 避免数字类型调用 .trim() 发生报错
     const newMembers = members.map((member, index) => {
         const name = (member.name || '').trim();
-        const contactId = (member.contactId || member.id || '').trim();
+        const contactId = String(member.contactId || '').trim(); 
         const remark = (member.remark || '').trim();
-        return { name, contactId: contactId || null, sort_order: index, remark };
+        return { 
+            id: member.id ? Number(member.id) : null, // 对应关系表记录的物理主键 pk
+            name, 
+            contactId: contactId || null, 
+            sort_order: index, 
+            remark 
+        };
     }).filter(m => m.name);
 
-    const oldMembersMap = new Map();
-    oldMembers.forEach(m => {
-        const key = `${m.contact_id || ''}\t${m.name}`;
-        oldMembersMap.set(key, m);
-    });
+    // 3. 建立老数据的主键映射表，以及新数据的主键集合
+    const oldMembersMap = new Map(oldMembers.map(m => [m.pk, m]));
+    const newMembersIds = new Set(newMembers.map(m => m.id).filter(Boolean));
 
-    const newMembersKeys = new Set(newMembers.map(m => `${m.contact_id || ''}\t${m.name}`));
-
-    // 删除已被移除的群组成员
-    for (const [key, oldRow] of oldMembersMap.entries()) {
-        if (!newMembersKeys.has(key)) {
+    // 4. 差异化删除：如果老记录的物理主键不在前端传回的集合里，说明该成员已被彻底移除
+    for (const oldRow of oldMembers) {
+        if (!newMembersIds.has(oldRow.pk)) {
             await dbRun(`DELETE FROM contact_topic_members WHERE id = ?`, [oldRow.pk]);
         }
     }
 
-    // 按需添加或精准更新单条排序与备注
+    // 5. 精准更新或按需新增
     for (const newMem of newMembers) {
-        const key = `${newMem.contactId || ''}\t${newMem.name}`;
-        if (oldMembersMap.has(key)) {
-            const oldRow = oldMembersMap.get(key);
-            if (oldRow.sort_order !== newMem.sort_order || oldRow.remark !== newMem.remark) {
+        if (newMem.id && oldMembersMap.has(newMem.id)) {
+            // 情况 A：物理记录存在，在原记录上精准修改（涵盖了绑定 ID、改名字、改备注或换排序）
+            const oldRow = oldMembersMap.get(newMem.id);
+            if (
+                oldRow.contact_id !== newMem.contactId ||
+                oldRow.name !== newMem.name ||
+                oldRow.sort_order !== newMem.sort_order ||
+                oldRow.remark !== newMem.remark
+            ) {
                 await dbRun(`
                     UPDATE contact_topic_members 
-                    SET sort_order = ?, remark = ?, updated_at = CURRENT_TIMESTAMP 
+                    SET contact_id = ?, name = ?, sort_order = ?, remark = ?, updated_at = CURRENT_TIMESTAMP 
                     WHERE id = ?
-                `, [newMem.sort_order, newMem.remark, oldRow.pk]);
+                `, [newMem.contactId, newMem.name, newMem.sort_order, newMem.remark, newMem.id]);
             }
         } else {
+            // 情况 B：没有主键，判定为完全新增的成员
             await dbRun(`
                 INSERT INTO contact_topic_members (topic_id, contact_id, name, sort_order, remark)
                 VALUES (?, ?, ?, ?, ?)

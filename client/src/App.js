@@ -3,10 +3,14 @@ import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header';
+import LoginPage from './pages/LoginPage';
 import CrmPage from './pages/CrmPage';
 import RelativeCalculatorPage from './pages/RelationshipCalculator';
 
 export default function App() {
+  // 检查本地是否存在 Token
+  const [token, setToken] = useState(() => localStorage.getItem('crm_token'));
+
   // 模态框及弹窗控制
   const [formVisible, setFormVisible] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
@@ -25,6 +29,20 @@ export default function App() {
     localStorage.setItem('crm_feature_mode', mode);
   };
 
+  // ==========================================
+  // 情况 A：未登录，渲染独立密码保护界面
+  // ==========================================
+  if (!token) {
+    return (
+      <ConfigProvider locale={zhCN}>
+        <LoginPage onLoginSuccess={(receivedToken) => setToken(receivedToken)} />
+      </ConfigProvider>
+    );
+  }
+
+  // ==========================================
+  // 情况 B：已登录，正常渲染主系统布局
+  // ==========================================
   return (
     <ConfigProvider locale={zhCN}>
       <BrowserRouter>

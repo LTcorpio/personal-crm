@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Button, message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Checkbox, Radio, Flex } from 'antd';
-import { SettingOutlined } from '@ant-design/icons';
+import { Button, message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Checkbox, Radio, Flex, Tooltip } from 'antd';
+import { SettingOutlined, TableOutlined } from '@ant-design/icons';
 import ColumnSetting, { DEFAULT_COLUMNS } from '../components/ColumnSetting';
 import ContactCard from '../components/ContactCard';
 import ContactMiniCard from '../components/ContactMiniCard';
@@ -10,7 +10,6 @@ import Sidebar, { SidebarTitle, SidebarExtra } from '../components/Sidebar';
 import TagManagementModal from '../components/TagManagementModal';
 import SearchFilter from '../components/SearchFilter';
 import CrmStatsView from '../components/CrmStatsView';
-// import TopicSidebar from '../components/TopicSidebar';
 import CrmBottomBar from '../components/CrmBottomBar';
 
 import { filterContacts, enrichTreeWithCounts } from '../utils/crmUtils';
@@ -191,31 +190,35 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   };
 
   const selectedTopic = topics.find(topic => topic.id === selectedTopicId);
-  const { topicContacts, unmatchedTopicMembers } = useMemo(() => {
-    if (!selectedTopic) return { topicContacts: [], unmatchedTopicMembers: [] };
+  // 优化后的主题数据处理：提取所有成员并标记是否匹配成功
+  const { topicContacts, allTopicMembers } = useMemo(() => {
+    if (!selectedTopic) return { topicContacts: [], allTopicMembers: [] };
     const contactsById = new Map(contacts.map(contact => [String(contact.id), contact]));
-    const contactsByName = new Map();
-    contacts.forEach(contact => {
-      if (!contactsByName.has(contact.name)) contactsByName.set(contact.name, contact);
-    });
+    // const contactsByName = new Map();
+    // contacts.forEach(contact => {
+    //   if (!contactsByName.has(contact.name)) contactsByName.set(contact.name, contact);
+    // });
 
     const seen = new Set();
     const matched = [];
-    const unmatched = [];
+    const allMembersProcessed = [];
 
     (selectedTopic.members || []).forEach(member => {
-      const contact = member.contactId ? contactsById.get(String(member.contactId)) : contactsByName.get(member.name);
+      const contact = member.contactId ? contactsById.get(String(member.contactId)) : null; // contactsByName.get(member.name);
       if (contact) {
         const key = String(contact.id);
         if (!seen.has(key)) {
           seen.add(key);
           matched.push(contact);
         }
-      } else {
-        unmatched.push(member);
       }
+      // 组装完整成员列表，并附带状态标记
+      allMembersProcessed.push({
+        ...member,
+        isMatched: !!contact
+      });
     });
-    return { topicContacts: matched, unmatchedTopicMembers: unmatched };
+    return { topicContacts: matched, allTopicMembers: allMembersProcessed };
   }, [contacts, selectedTopic]);
 
   const activeContacts = crmFeatureMode === 'topics' ? topicContacts : contacts;
@@ -248,23 +251,60 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
       style={{ width: isSmallScreen ? '100%' : siderWidth }} 
       className="h-full flex flex-col shrink-0 overflow-hidden"
     >
-      <Sidebar 
-        ref={sidebarRef}                     // 绑定唯一 ref
-        mode={crmFeatureMode}                // 传入模式：tags / topics
-        hideHeader={hideHeader}              // 隐藏标题栏-Drawer适配
-        // 标签所需属性
-        processedTagTree={processedTagTree}
-        selectedTagPath={selectedTagPath}
-        setSelectedTagPath={setSelectedTagPath}
-        onManageTags={() => setTagManageVisible(true)}
-        // 主题所需属性
-        topics={topics}
-        setTopics={setTopics}
-        selectedTopicId={selectedTopicId}
-        setSelectedTopicId={setSelectedTopicId}
-        onSaveTopic={handleSaveTopic}
-        onDeleteTopic={handleDeleteTopic}
-      />
+      <div className="flex-1 min-h-0">
+        <Sidebar 
+          ref={sidebarRef}                     
+          mode={crmFeatureMode}                
+          hideHeader={hideHeader}              
+          contacts={contacts}
+          processedTagTree={processedTagTree}
+          selectedTagPath={selectedTagPath}
+          setSelectedTagPath={setSelectedTagPath}
+          onManageTags={() => setTagManageVisible(true)}
+          topics={topics}
+          setTopics={setTopics}
+          selectedTopicId={selectedTopicId}
+          setSelectedTopicId={setSelectedTopicId}
+          onSaveTopic={handleSaveTopic}
+          onDeleteTopic={handleDeleteTopic}
+        />
+      </div>
+
+      {crmFeatureMode === 'topics' && selectedTopic && allTopicMembers.length > 0 && (
+        <div className="border-t border-gray-200 bg-slate-50/50 p-4 flex flex-col overflow-hidden max-h-[45%]">
+          <div className="flex flex-row flex-wrap gap-2 overflow-y-auto justify-center pb-2 w-full">
+            {allTopicMembers.map((member, idx) => {
+              const tagComponent = (
+                <Tag 
+                  color={member.isMatched ? 'green' : 'orange'}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs m-0 transition-all ${
+                    member.remark ? 'cursor-help border-dashed !border-slate-400 shadow-sm' : ''
+                  } ${
+                    member.isMatched ? 'border-green-100 bg-green-50/50' : 'border-orange-100 bg-orange-50/50'
+                  }`}
+                >
+                  <span className="font-medium text-gray-800">
+                    {member.name}
+                  </span>
+                  {!member.isMatched && (
+                    <span className="text-[10px] text-orange-600 bg-orange-100/60 px-1 rounded scale-95 font-normal shrink-0">
+                      未匹配
+                    </span>
+                  )}
+                </Tag>
+              );
+
+              return member.remark ? (
+                <Tooltip key={idx} title={member.remark} placement="top">
+                  {tagComponent}
+                </Tooltip>
+              ) : (
+                React.cloneElement(tagComponent, { key: idx })
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -343,22 +383,6 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
             searchFields={searchFields}
             onSearchFieldsChange={handleSearchFieldsChange}
           />
-
-          {crmFeatureMode === 'topics' && unmatchedTopicMembers.length > 0 && (
-            <div className="bg-orange-50 px-6 py-2 border-b border-orange-100 text-xs text-orange-700 shrink-0">
-              当前主题中有 {unmatchedTopicMembers.length} 位成员未匹配到联系人档案：
-              {unmatchedTopicMembers.map(member => member.name).join('、')}
-            </div>
-          )}
-          
-          {viewMode === 'list' && (
-            <div className="bg-amber-50 px-6 py-2 border-b border-amber-100 flex items-center justify-between shrink-0">
-              <span className="text-xs text-amber-700 font-medium">💡 提示：点击列表中的头像或姓名可查看完整详情卡片。</span>
-              <Button size="small" icon={<SettingOutlined />} onClick={() => setSettingVisible(true)}>
-                列设置
-              </Button>
-            </div>
-          )}
 
           <div id="crm-content" className="flex-1 overflow-y-auto p-6">
             {loading ? (
@@ -484,13 +508,21 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
           </div>
         )}
       </Modal>
+
       <TagManagementModal
         visible={tagManageVisible}
         onClose={() => { setTagManageVisible(false); fetchData(); }}
         tagTree={tagTree}
       />
-      <FloatButton.Group style={{ right: 24, bottom: 72 }}>
+
+      <FloatButton.Group>
+        {/* 当处于列表视图时，显示列设置悬浮按钮 */}
+        {viewMode === 'list' && (
+          <FloatButton icon={<TableOutlined />} tooltip="列设置" onClick={() => setSettingVisible(true)} />
+        )}
+        {/* 头像展示设置 */}
         <FloatButton icon={<SettingOutlined />} tooltip="头像展示设置" onClick={() => setAvatarDrawerVisible(true)} />
+        {/* 回到顶部 */}
         <FloatButton.BackTop duration={300} visibilityHeight={150} target={() => document.getElementById('crm-content') || window} style={{ position: 'static' }} />
       </FloatButton.Group>
 
