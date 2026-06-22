@@ -70,13 +70,6 @@ export default function ContactSequenceModal({ open, onClose, contacts, onSaveSu
       cancelText="取消"
       width="80%"
     >
-      {/* 操作提示条 */}
-      <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-md text-xs text-blue-700 flex justify-between items-center select-none">
-        <span>💡 提示：支持<strong>直接按住并拖拽人员标签</strong>改变内部顺序；鼠标悬浮在标签上可查看人员详细凭证。</span>
-        <span className="text-gray-400 font-medium">共 {modalContacts.length} 人</span>
-      </div>
-      
-      {/* 人员标签流容器 (pt-7 为第一行悬浮气泡留出展示空间) */}
       <div className="flex flex-wrap gap-3 pt-4 pb-4 min-h-[200px]">
         {modalContacts.map((contact, index) => {
           const isDragging = draggingIndex === index;
@@ -112,7 +105,7 @@ export default function ContactSequenceModal({ open, onClose, contacts, onSaveSu
                 <span className="text-gray-400">ID:</span>
                 <span className="font-mono font-medium">{contact.id}</span>
                 <span className="text-gray-600">|</span>
-                <span className="text-gray-400">标签:</span>
+                <span className="text-gray-400">称呼:</span>
                 <span className="font-medium">{contact.title || '无'}</span>
               </div>
             </div>

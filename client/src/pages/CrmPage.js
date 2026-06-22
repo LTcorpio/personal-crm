@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Button, message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Checkbox, Radio, Flex, Tooltip } from 'antd';
-import { OrderedListOutlined, SettingOutlined, TableOutlined, UserOutlined } from '@ant-design/icons';
+import { message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Checkbox, Radio, Flex, Tooltip } from 'antd';
+import { OrderedListOutlined, TableOutlined, UserOutlined } from '@ant-design/icons';
 import ColumnSetting, { DEFAULT_COLUMNS } from '../components/ColumnSetting';
 import ContactCard from '../components/ContactCard';
 import ContactMiniCard from '../components/ContactMiniCard';
@@ -534,7 +534,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         {/* 人物序列调整 */}
         {crmFeatureMode === 'tags' && <FloatButton 
           icon={<OrderedListOutlined />} 
-          tooltip="管理所有人员序列" 
+          tooltip="管理人员序列" 
           onClick={() => setSequenceModalVisible(true)} 
         />}
         {/* 头像展示设置 */}

@@ -83,7 +83,7 @@ export default function ContactListTable({
           >
             编辑
           </Button>
-          <Popconfirm
+          {/* <Popconfirm
             title="确认彻底删除这位联系人吗？"
             description="删除后关联的外键将被同步清理。"
             onConfirm={() => handleDeleteContact(record.id)}
@@ -94,7 +94,7 @@ export default function ContactListTable({
             <Button type="link" size="small" danger>
               删除
             </Button>
-          </Popconfirm>
+          </Popconfirm> */}
         </Space>
       ),
     },
