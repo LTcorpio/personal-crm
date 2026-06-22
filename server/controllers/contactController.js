@@ -66,7 +66,12 @@ exports.saveContact = async (req, res) => {
                 formerNamesRows = await dbQuery(`SELECT name FROM former_names WHERE contact_id = ?`, [contactId]);
                 methodsRows = await dbQuery(`SELECT type, value FROM contact_methods WHERE contact_id = ?`, [contactId]);
                 // 此处获取自增主键 id 作为 pk，方便后续精准更新
-                relationsRows = await dbQuery(`SELECT id as pk, related_contact_id as id, related_name as name, relation, remark FROM contact_relations WHERE contact_id = ?`, [contactId]);
+                relationsRows = await dbQuery(`
+                    SELECT id as pk, related_contact_id as id, related_name as name, relation, remark, sort_order 
+                    FROM contact_relations 
+                    WHERE contact_id = ? 
+                    ORDER BY sort_order ASC
+                `, [contactId]);
                 
                 const currentContactTags = await dbQuery(`SELECT tag_id FROM contact_tags WHERE contact_id = ?`, [contactId]);
                 oldTagIds = currentContactTags.map(row => row.tag_id);
@@ -101,7 +106,7 @@ exports.saveContact = async (req, res) => {
                         name: r.name || "",
                         relation: r.relation || "",
                         remark: r.remark || ""
-                    })).sort((a, b) => a.name.localeCompare(b.name) || a.relation.localeCompare(b.relation)),
+                    })),
                     tag: tagPaths.map(String).sort()
                 };
 
@@ -135,7 +140,7 @@ exports.saveContact = async (req, res) => {
                         name: r.name || "",
                         relation: r.relation || "",
                         remark: r.remark || ""
-                    })).sort((a, b) => a.name.localeCompare(b.name) || a.relation.localeCompare(b.relation)),
+                    })),
                     tag: (data.tag || []).filter(Boolean).map(t => String(t).trim()).sort()
                 };
 
@@ -247,11 +252,12 @@ exports.saveContact = async (req, res) => {
             oldRelationsMap.set(key, r);
         });
 
-        const newRelations = (data.related || []).map(r => ({
+        const newRelations = (data.related || []).map((r, index) => ({
             id: r.id || r.contactId || "",
             name: r.name || "",
             relation: r.relation || "",
-            remark: r.remark || ""
+            remark: r.remark || "",
+            sort_order: index
         }));
         const newRelationsKeys = new Set(newRelations.map(r => `${r.id}\t${r.name}\t${r.relation}`));
 
@@ -266,20 +272,20 @@ exports.saveContact = async (req, res) => {
             const key = `${newRel.id}\t${newRel.name}\t${newRel.relation}`;
             if (oldRelationsMap.has(key)) {
                 const oldRow = oldRelationsMap.get(key);
-                // 仅当关联对象的备注发生改变时，单条更新
-                if ((oldRow.remark || "") !== newRel.remark) {
+                // 只要备注变了，或者在前端的拖动排序（sort_order）变了，就执行更新
+                if ((oldRow.remark || "") !== newRel.remark || oldRow.sort_order !== newRel.sort_order) {
                     await dbRun(`
                         UPDATE contact_relations 
-                        SET remark = ?, updated_at = CURRENT_TIMESTAMP 
+                        SET remark = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP 
                         WHERE id = ?
-                    `, [newRel.remark || '', oldRow.pk]);
+                    `, [newRel.remark || '', newRel.sort_order, oldRow.pk]);
                 }
             } else {
-                // 全新关联项，正常插入
+                // 全新关联项，正常插入排序权重
                 await dbRun(`
-                    INSERT INTO contact_relations (contact_id, related_contact_id, related_name, relation, remark)
-                    VALUES (?, ?, ?, ?, ?)
-                `, [finalContactId, newRel.id || null, newRel.name, newRel.relation, newRel.remark || '']);
+                    INSERT INTO contact_relations (contact_id, related_contact_id, related_name, relation, remark, sort_order)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                `, [finalContactId, newRel.id || null, newRel.name, newRel.relation, newRel.remark || '', newRel.sort_order]);
             }
         }
 
@@ -366,7 +372,7 @@ exports.getContacts = async (req, res) => {
         }
         
         if (!id) {
-            sql += ` ORDER BY created_at ASC`;
+            sql += ` ORDER BY sort_order ASC`;
         }
 
         const contacts = await dbQuery(sql, params);
@@ -378,7 +384,12 @@ exports.getContacts = async (req, res) => {
             const contactMethods = { wechat: "", qq: "", email: "", tel: "", tiktok: "" };
             methodsRows.forEach(m => contactMethods[m.type] = m.value);
 
-            const relationsRows = await dbQuery(`SELECT related_contact_id as id, related_name as name, relation, remark FROM contact_relations WHERE contact_id = ?`, [c.id]);
+            const relationsRows = await dbQuery(`
+                SELECT related_contact_id as id, related_name as name, relation, remark 
+                FROM contact_relations 
+                WHERE contact_id = ? 
+                ORDER BY sort_order ASC
+            `, [c.id]);
             const tagPaths = await getFullTagPaths(c.id);
 
             result.push({
@@ -713,5 +724,44 @@ exports.updateTopicsOrder = async (req, res) => {
     } catch (error) {
         await dbRun('ROLLBACK');
         res.status(500).json({ success: false, message: "排序更新失败" });
+    }
+};
+
+// 11. 修改标签名称
+exports.updateTag = async (req, res) => {
+    const { id } = req.params;
+    const { name } = req.body;
+    const tagName = (name || '').trim();
+
+    if (!tagName) {
+        return res.status(400).json({ success: false, message: "标签名称不能为空" });
+    }
+
+    try {
+        await dbRun(`UPDATE tags SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [tagName, id]);
+        res.json({ success: true, message: "标签名称更新成功" });
+    } catch (error) {
+        console.error("更新标签失败:", error);
+        res.status(500).json({ success: false, message: "服务器内部错误" });
+    }
+};
+
+// 12. 更新所有人员全局排序序列
+exports.updateContactsOrder = async (req, res) => {
+    const { contactIds } = req.body;
+    if (!Array.isArray(contactIds)) {
+        return res.status(400).json({ success: false, message: "参数错误" });
+    }
+    try {
+        await dbRun('BEGIN TRANSACTION');
+        for (const [index, id] of contactIds.entries()) {
+            await dbRun(`UPDATE contacts SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [index, id]);
+        }
+        await dbRun('COMMIT');
+        res.json({ success: true, message: "人员顺序更新成功" });
+    } catch (error) {
+        await dbRun('ROLLBACK');
+        console.error("更新人员序列失败:", error);
+        res.status(500).json({ success: false, message: "人员顺序更新失败" });
     }
 };

@@ -255,6 +255,7 @@ export default function ContactForm({ visible, contact, onCancel, onSave, onDele
       footer={renderFooter()}
       width={1080}
       destroyOnHidden
+      className="select-none"
     >
       <Form form={form} layout="vertical" name="contact_form" initialValues={{ gender: 1 }}>
         <div className="grid grid-cols-5 gap-4">

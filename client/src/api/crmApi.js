@@ -53,12 +53,14 @@ export const contactApi = {
   getAll: () => api.get('/contacts'),
   save: (data) => api.post('/contacts', data),
   delete: (id) => api.delete(`/contacts/${id}`),
+  updateOrder: (contactIds) => api.put('/contacts/order', { contactIds }),
 };
 
 export const tagApi = {
   getTree: () => api.get('/tags/tree'),
   updateOrder: (tagIds) => api.put('/tags/order', { tagIds }),
   delete: (id) => api.delete(`/tags/${id}`),
+  update: (id, name) => api.put(`/tags/${id}`, { name }),
 };
 
 export const topicApi = {

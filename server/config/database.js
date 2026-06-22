@@ -41,6 +41,7 @@ db.serialize(() => {
             address TEXT,
             extra TEXT,
             remark TEXT,
+            sort_order INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -104,10 +105,11 @@ db.serialize(() => {
         CREATE TABLE IF NOT EXISTS contact_relations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             contact_id TEXT,
-            related_contact_id TEXT, -- 可为空（如果关联的人没录入系统）
-            related_name TEXT NOT NULL, -- 名字
-            relation TEXT NOT NULL,     -- 关系如 "父亲"
+            related_contact_id TEXT,
+            related_name TEXT NOT NULL,
+            relation TEXT NOT NULL,
             remark TEXT,
+            sort_order INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,

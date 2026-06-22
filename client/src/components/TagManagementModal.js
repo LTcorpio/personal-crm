@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Button, Breadcrumb, message, Space, Empty, Popconfirm } from 'antd';
+import { Modal, Button, Breadcrumb, message, Space, Empty, Popconfirm, Input } from 'antd';
 import { 
   ArrowUpOutlined, 
   ArrowDownOutlined, 
@@ -15,6 +15,19 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
   // currentPath 存储下钻路线中的父辈节点对象数组
   const [currentPath, setCurrentPath] = useState([]);
   const [currentList, setCurrentList] = useState([]);
+  // 标签名称编辑
+  const [editingId, setEditingId] = useState(null);
+  const [editingName, setEditingName] = useState('');
+  const [hasSaved, setHasSaved] = useState(false);
+  const [modifiedNames, setModifiedNames] = useState({});
+
+  const [isOrderDirty, setIsOrderDirty] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setHasSaved(false);
+    }
+  }, [visible]);
 
   // 根据系统的完整 tagTree 及当前的下钻深度 currentPath，动态提纯出当前的同级标签集合
   useEffect(() => {
@@ -31,9 +44,11 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
       }
     }
     setCurrentList([...list]);
+    setIsOrderDirty(false);
+    setModifiedNames({});
   }, [tagTree, currentPath, visible]);
 
-  // 处理标签上下移动排序变换
+  // 处理标签上下移动排序变换（仅本地）
   const handleMove = async (index, direction) => {
     const newList = [...currentList];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
@@ -44,14 +59,30 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
     const temp = newList[index];
     newList[index] = newList[targetIndex];
     newList[targetIndex] = temp;
-    
+
+    setCurrentList(newList);
+    setIsOrderDirty(true);
+  };
+
+  // 标签排序保存至数据库
+  const handleSaveOrder = async () => {
     try {
-      const tagIds = newList.map(item => item.id);
+      // 批量保存发生过改变的标签名称
+      const renamePromises = Object.entries(modifiedNames).map(([id, name]) =>
+        tagApi.update(id, name)
+      );
+      if (renamePromises.length > 0) {
+        await Promise.all(renamePromises);
+      }
+
+      const tagIds = currentList.map(item => item.id);
       await tagApi.updateOrder(tagIds);
-      message.success('排序已同步');
-      setCurrentList(newList);
+      message.success('排序已保存');
+      setIsOrderDirty(false);
+      setModifiedNames({}); // 清空暂存
+      setHasSaved(true);
     } catch (err) {
-      message.error('排序保存失败，请检查网络链接');
+      message.error('保存失败');
     }
   };
 
@@ -62,11 +93,29 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
       if (res.data.success) {
         message.success(res.data.message || '标签删除成功');
         setCurrentList(prev => prev.filter(item => item.id !== id));
+        setHasSaved(true);
       }
     } catch (err) {
-      const errMsg = err.response?.data?.message || '该标签包含下属联系人，删除受限';
+      const errMsg = err.response?.data?.message || '该标签包含下属联系人，无法删除';
       message.error(errMsg);
     }
+  };
+
+  // 处理标签重命名
+  const handleRename = async (id) => {
+    const trimmed = editingName.trim();
+    if (!trimmed || trimmed === currentList.find(t => t.id === id)?.name) {
+      setEditingId(null);
+      return;
+    }
+    setCurrentList(prev => prev.map(item => item.id === id ? { ...item, name: trimmed } : item));
+    setModifiedNames(prev => ({ ...prev, [id]: trimmed }));
+    setIsOrderDirty(true);
+    setEditingId(null);
+  };
+
+  const handleClose = () => {
+    onClose(hasSaved); // 将是否修改过数据的状态传给父组件
   };
 
   const breadcrumbItems = [
@@ -102,10 +151,15 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
     <Modal
       title="标签管理"
       open={visible}
-      onCancel={onClose}
+      onCancel={handleClose}
       footer={[
-        <Button key="close" type="primary" onClick={onClose} className="rounded-md">
-          完成并关闭
+        isOrderDirty && (
+          <Button key="save" onClick={handleSaveOrder}>
+            保存修改
+          </Button>
+        ),
+        <Button key="close" type="primary" onClick={handleClose}>
+          关闭
         </Button>
       ]}
       width={600}
@@ -140,11 +194,30 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
               {currentList.map((item, index) => (
                 <div
                   key={item.id}
-                  className="px-4 py-3 hover:bg-gray-50/50 transition-all duration-200 flex items-center justify-between group"
+                  className="px-4 py-1 hover:bg-gray-50/50 transition-all duration-200 flex items-center justify-between group"
                 >
                   {/* 左侧标签基础信息 */}
                   <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                    <span className="font-medium text-sm text-gray-700 truncate">{item.name}</span>
+                    {editingId === item.id ? (
+                      <Input
+                        size="small"
+                        className="w-36 h-6 text-xs rounded"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={() => handleRename(item.id)}
+                        onPressEnter={() => handleRename(item.id)}
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span 
+                        className="font-medium text-sm text-gray-700 truncate cursor-pointer hover:text-blue-600"
+                        onClick={() => { setEditingId(item.id); setEditingName(item.name); }}
+                        title="点击修改名称"
+                      >
+                        {item.name}
+                      </span>
+                    )}
                     {item.children && item.children.length > 0 && (
                       <span className="text-[11px] bg-gray-100 text-gray-500 font-medium px-2 py-0.5 rounded-full shrink-0">
                         子级 × {item.children.length}

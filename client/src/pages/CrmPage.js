@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button, message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Checkbox, Radio, Flex, Tooltip } from 'antd';
-import { SettingOutlined, TableOutlined } from '@ant-design/icons';
+import { OrderedListOutlined, SettingOutlined, TableOutlined, UserOutlined } from '@ant-design/icons';
 import ColumnSetting, { DEFAULT_COLUMNS } from '../components/ColumnSetting';
 import ContactCard from '../components/ContactCard';
 import ContactMiniCard from '../components/ContactMiniCard';
 import ContactForm from '../components/ContactForm';
 import ContactListTable from '../components/ContactListTable';
 import Sidebar, { SidebarTitle, SidebarExtra } from '../components/Sidebar';
+import ContactSequenceModal from '../components/ContactSequenceModal';
 import TagManagementModal from '../components/TagManagementModal';
 import SearchFilter from '../components/SearchFilter';
 import CrmStatsView from '../components/CrmStatsView';
@@ -26,6 +27,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   const [loading, setLoading] = useState(false);
   const [searchTxt, setSearchTxt] = useState('');
   const [selectedTagPath, setSelectedTagPath] = useState(null);
+  const [sequenceModalVisible, setSequenceModalVisible] = useState(false);
   const [tagManageVisible, setTagManageVisible] = useState(false);
   const sidebarRef = useRef(null);
   
@@ -509,6 +511,13 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         )}
       </Modal>
 
+      <ContactSequenceModal
+        open={sequenceModalVisible}
+        onClose={() => setSequenceModalVisible(false)}
+        contacts={contacts}
+        onSaveSuccess={fetchData}
+      />
+
       <TagManagementModal
         visible={tagManageVisible}
         onClose={() => { setTagManageVisible(false); fetchData(); }}
@@ -516,14 +525,20 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
       />
 
       <FloatButton.Group>
+        {/* 回到顶部 */}
+        <FloatButton.BackTop duration={300} visibilityHeight={150} target={() => document.getElementById('crm-content') || window} style={{ position: 'static' }} />
         {/* 当处于列表视图时，显示列设置悬浮按钮 */}
         {viewMode === 'list' && (
           <FloatButton icon={<TableOutlined />} tooltip="列设置" onClick={() => setSettingVisible(true)} />
         )}
+        {/* 人物序列调整 */}
+        {crmFeatureMode === 'tags' && <FloatButton 
+          icon={<OrderedListOutlined />} 
+          tooltip="管理所有人员序列" 
+          onClick={() => setSequenceModalVisible(true)} 
+        />}
         {/* 头像展示设置 */}
-        <FloatButton icon={<SettingOutlined />} tooltip="头像展示设置" onClick={() => setAvatarDrawerVisible(true)} />
-        {/* 回到顶部 */}
-        <FloatButton.BackTop duration={300} visibilityHeight={150} target={() => document.getElementById('crm-content') || window} style={{ position: 'static' }} />
+        {(crmFeatureMode === 'tags' || crmFeatureMode === 'topics') && <FloatButton icon={<UserOutlined />} tooltip="头像展示设置" onClick={() => setAvatarDrawerVisible(true)} />}
       </FloatButton.Group>
 
       <Drawer title="头像展示全局配置" placement="bottom" height={200} onClose={() => setAvatarDrawerVisible(false)} open={avatarDrawerVisible} destroyOnClose>

@@ -186,11 +186,13 @@ router.post('/settings/update', async (req, res) => {
 // 联系人增删改查
 router.post('/contacts', contactController.saveContact);
 router.get('/contacts', contactController.getContacts);
+router.put('/contacts/order', contactController.updateContactsOrder);
 router.delete('/contacts/:id', contactController.deleteContact);
 
 // 标签树管理
 router.get('/tags/tree', contactController.getTagTree);
 router.put('/tags/order', contactController.updateTagsOrder);
+router.put('/tags/:id', contactController.updateTag);
 router.delete('/tags/:id', contactController.deleteTag);
 
 // 主题分类管理
