@@ -1,10 +1,11 @@
 import React from 'react';
 import { Tag } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
+import AuthenticatedAvatar from './AuthenticatedAvatar';
 
 export default function ContactMiniCard({ contact, onClick, avatarConfig }) {
-  const { face_thumb_url, name, gender, title } = contact;
-  const showThumb = avatarConfig?.showAvatarThumb !== false && face_thumb_url;
+  const { face_uuid, name, gender, title } = contact;
+  const showThumb = avatarConfig?.showAvatarThumb !== false && face_uuid;
   const isTextFallback = !showThumb && avatarConfig?.avatarFallbackType && avatarConfig.avatarFallbackType !== 'default';
 
   return (
@@ -19,7 +20,7 @@ export default function ContactMiniCard({ contact, onClick, avatarConfig }) {
         }`}>
           {(() => {
             if (showThumb) {
-              return <img src={face_thumb_url} alt={name} className="w-full h-full object-cover" />;
+              return <AuthenticatedAvatar uuid={face_uuid} alt={name} className="w-full h-full object-cover" />;
             }
             if (avatarConfig?.avatarFallbackType === 'lastname' && name) {
               return <span className="text-[24px] font-bold text-blue-600">{name.charAt(0)}</span>;

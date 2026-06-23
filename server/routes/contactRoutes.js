@@ -21,6 +21,27 @@ async function initSystemSettings() {
         )
     `);
 
+    // 创建 Token 活跃会话表
+    await dbRun(`
+        CREATE TABLE IF NOT EXISTS active_sessions (
+            token TEXT PRIMARY KEY,
+            ip TEXT,
+            device TEXT,
+            logged_in_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    // 每次服务器启动后，自动清理 7 天以前的过期残留会话
+    try {
+        await dbRun(`
+            DELETE FROM active_sessions 
+            WHERE logged_in_at < datetime('now', '-7 days')
+        `);
+        console.log(`[维护] 已成功自动清理 7 天前的历史 Token`);
+    } catch (cleanError) {
+        console.error("[维护] 自动清理过期 Token 失败:", cleanError);
+    }
+
     // 2. 初始化 JWT 密钥
     const secretRow = await dbQuery(`SELECT value FROM system_settings WHERE key = 'jwt_secret'`);
     if (secretRow.length > 0) {
@@ -80,6 +101,13 @@ router.post('/auth/login', async (req, res) => {
             // 验证通过，获取动态密钥并签发 Token
             const currentSecret = await getJwtSecret();
             const token = jwt.sign({ role: 'admin' }, currentSecret, { expiresIn: '7d' });
+            // req.headers['x-forwarded-for'] 用于穿透代理（如 Nginx）获取真实 IP
+            const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '未知IP';
+            const device = req.headers['user-agent'] || '未知设备';
+            await dbRun(
+                `INSERT OR REPLACE INTO active_sessions (token, ip, device) VALUES (?, ?, ?)`,
+                [token, ip, device]
+            );
             return res.json({ success: true, token });
         }
 
@@ -94,9 +122,9 @@ router.post('/auth/login', async (req, res) => {
 // 2. JWT 身份验证中间件
 // ==========================================
 const authMiddleware = async (req, res, next) => {
-    if (req.path.startsWith('/proxy-face/') || req.path.startsWith('/auth/login')) {
-        return next();
-    }
+    // if (req.path.startsWith('/proxy-face/') || req.path.startsWith('/auth/login')) {
+    //     return next();
+    // }
 
     // 从请求头获取 Authorization: Bearer <token>
     const authHeader = req.headers['authorization'];
@@ -107,10 +135,17 @@ const authMiddleware = async (req, res, next) => {
     }
 
     try {
+        // 检查 Token
+        const sessionRow = await dbQuery(`SELECT 1 FROM active_sessions WHERE token = ?`, [token]);
+        if (sessionRow.length === 0) {
+            return res.status(401).json({ success: false, message: "凭证已失效，请重新登录" });
+        }
+
         const currentSecret = await getJwtSecret();
         jwt.verify(token, currentSecret, (err, decoded) => {
             if (err) {
-                return res.status(403).json({ success: false, message: "凭证已过期或无效，请重新登录" });
+                dbRun(`DELETE FROM active_sessions WHERE token = ?`, [token]).catch(() => {});
+                return res.status(403).json({ success: false, message: "凭证已失效，请重新登录" });
             }
             next();
         });
@@ -121,8 +156,25 @@ const authMiddleware = async (req, res, next) => {
 
 router.use(authMiddleware);
 
+// 退出登录
+router.post('/auth/logout', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+        
+        if (token) {
+            await dbRun(`DELETE FROM active_sessions WHERE token = ?`, [token]);
+        }
+        
+        return res.json({ success: true, message: "安全退出成功" });
+    } catch (error) {
+        console.error("注销会话失败:", error);
+        return res.status(500).json({ success: false, message: "服务器内部错误，退出失败" });
+    }
+});
+
 // ==========================================
-// 新增：修改密码和密钥的后端接口
+// 修改密码和密钥的后端接口
 // ==========================================
 router.post('/settings/update', async (req, res) => {
     // 1. 接收参数增加 oldPassword

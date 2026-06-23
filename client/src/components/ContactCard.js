@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, Tag, Tooltip, Collapse } from 'antd';
 import { UserOutlined, PhoneOutlined, MailOutlined, EnvironmentOutlined, IdcardOutlined, WechatOutlined, QqOutlined, TikTokOutlined, QuestionCircleOutlined, CommentOutlined } from '@ant-design/icons';
 import Markdown from 'react-markdown';
+import AuthenticatedAvatar from './AuthenticatedAvatar';
 
 export default function ContactCard({ contact, onClick, noBorder = false, onRelatedClick, avatarConfig }) {
   // 从全路径标签中提取叶子节点的简写用于展示
@@ -57,14 +58,14 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
   const ageInfo = calculateAge(contact.birthday_solar, contact.deathday);
 
   // 判断当前状态下是否展示缩略图
-  const showThumb = avatarConfig?.showAvatarThumb !== false && contact.face_thumb_url;
+  const showThumb = avatarConfig?.showAvatarThumb !== false && contact.face_uuid;
   // 判断是否应用了文字后备样式
   const isTextFallback = !showThumb && avatarConfig?.avatarFallbackType && avatarConfig.avatarFallbackType !== 'default';
 
   return (
     <Card
       hoverable={!noBorder}
-      className={`rounded-xl overflow-hidden flex flex-col justify-between h-full bg-white ${noBorder ? 'border-0 shadow-none' : 'border border-gray-100 shadow-sm hover:shadow-lg cursor-default'}`}
+      className={`flex flex-col justify-between h-full bg-white ${noBorder ? 'border-0 shadow-none' : 'border border-gray-100 shadow-sm hover:shadow-lg cursor-default'}`}
       styles={{
         body: noBorder ? { padding: 0 } : undefined
       }}
@@ -79,7 +80,7 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
         }`}>
           {(() => {
             if (showThumb) {
-              return <img src={contact.face_thumb_url} alt={contact.name} className="w-full h-full object-cover" />;
+              return <AuthenticatedAvatar uuid={contact.face_uuid} alt={contact.name} className="w-full h-full object-cover" />;
             }
             if (avatarConfig?.avatarFallbackType === 'lastname' && contact.name) {
               return <span className="text-[28px] font-bold text-blue-600">{contact.name.charAt(0)}</span>;
@@ -120,7 +121,7 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
           <div className="mt-2 flex flex-wrap gap-1">
             {contact.tag?.map((t, idx) => (
               <Tooltip title={t} key={idx}>
-                <Tag color="blue" className="cursor-help border-none bg-blue-50 text-blue-600 rounded-md">
+                <Tag color="blue" className="border-none bg-blue-50 text-blue-600 rounded-lg">
                   {getLeafTagName(t)}
                 </Tag>
               </Tooltip>
@@ -288,7 +289,7 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
                 key: '1',
                 label: '扩展信息',
                 children: (
-                  <div className="prose prose-sm max-w-none text-sm font-sans">
+                  <div className="prose prose-sm max-w-none text-sm">
                     <Markdown>{contact.extra}</Markdown>
                   </div>
                 )
@@ -297,7 +298,7 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
                 key: '2',
                 label: '备注',
                 children: (
-                  <div className="prose prose-sm max-w-none text-sm font-sans">
+                  <div className="prose prose-sm max-w-none text-sm">
                     <Markdown>{contact.remark}</Markdown>
                   </div>
                 )

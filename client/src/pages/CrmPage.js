@@ -427,7 +427,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                     avatarConfig={avatarConfig}
                   />
                 )}
-                <div className="text-center text-gray-400 text-xs mt-8 pb-4 select-none tracking-wide font-sans">
+                <div className="text-center text-gray-400 text-xs mt-8 pb-4 select-none tracking-wide">
                   {isLastPage ? (
                     <span>— 这是最后一页了 —</span>
                   ) : (
@@ -465,6 +465,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
       <ContactForm 
         visible={formVisible} 
         contact={editingContact} 
+        tagTree={tagTree}
         onCancel={() => { setFormVisible(false); setEditingContact(null); }} 
         onSave={handleSaveContact} 
         onDelete={handleDeleteContact}
@@ -490,7 +491,6 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         onCancel={() => setDetailContact(null)}
         footer={null}
         width={720}
-        destroyOnHidden
         className='select-none'
       >
         {detailContact && (

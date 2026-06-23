@@ -44,7 +44,14 @@ export default function App() {
   // 情况 B：已登录，正常渲染主系统布局
   // ==========================================
   return (
-    <ConfigProvider locale={zhCN}>
+    <ConfigProvider
+      theme={{
+        token: {
+          fontFamily: '"LXGW WenKai Screen", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        },
+      }}
+      locale={zhCN}
+    >
       <BrowserRouter>
         <div className="h-screen bg-slate-50 text-slate-800 select-none flex flex-col">
           {/* 顶部主导航栏 */}

@@ -41,12 +41,11 @@ api.interceptors.response.use(
   }
 );
 
-// ==========================================
-// 3. 导出登录鉴权 API
-// ==========================================
+// 登录鉴权 API
 export const authApi = {
   login: (password) => api.post('/auth/login', { password }),
   changePassword: (oldPassword, newPassword) => api.post('/settings/update', { oldPassword, newPassword }),
+  logout: () => api.post('/auth/logout'),
 };
 
 export const contactApi = {
@@ -54,6 +53,7 @@ export const contactApi = {
   save: (data) => api.post('/contacts', data),
   delete: (id) => api.delete(`/contacts/${id}`),
   updateOrder: (contactIds) => api.put('/contacts/order', { contactIds }),
+  getAvatar: (Uuid) => api.get(`/proxy-face/${Uuid}`, { responseType: 'blob' })
 };
 
 export const tagApi = {

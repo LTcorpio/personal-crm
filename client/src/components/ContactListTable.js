@@ -1,6 +1,7 @@
 import React from 'react';
 import { Table, Button, Popconfirm, Space, Tag } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
+import AuthenticatedAvatar from './AuthenticatedAvatar';
 
 export default function ContactListTable({
   dataSource,
@@ -34,7 +35,7 @@ export default function ContactListTable({
                 }`}>
                   {(() => {
                     if (showThumb) {
-                      return <img src={text} alt="" className="w-full h-full object-cover" />;
+                      return <AuthenticatedAvatar uuid={record.face_uuid} className="w-full h-full object-cover" />;
                     }
                     if (avatarConfig?.avatarFallbackType === 'lastname' && record.name) {
                       return <span className="text-[16px] font-bold text-blue-600">{record.name.charAt(0)}</span>;

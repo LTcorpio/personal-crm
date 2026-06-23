@@ -104,9 +104,18 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
   };
 
   // 退出登录
-  const handleLogout = () => {
-    localStorage.removeItem('crm_token'); // 清除本地凭证
-    window.location.reload(); // 刷新页面，状态机自动退回登录卡片
+  const handleLogout = async () => {
+    try {
+      // 优先请求后端，将当前 Token 关进黑名单
+      await authApi.logout();
+    } catch (error) {
+      // 仅做错误打印，不阻断前端的清除逻辑
+      console.error('后端 Token 销毁失败:', error);
+    } finally {
+      // 无论后端是否成功，前端必须清除凭证并刷新
+      localStorage.removeItem('crm_token'); // 清除本地凭证
+      window.location.reload(); // 刷新页面，状态机自动退回登录卡片
+    }
   };
 
   return (
