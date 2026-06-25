@@ -10,7 +10,7 @@ import Sidebar, { SidebarTitle, SidebarExtra } from '../components/Sidebar';
 import ContactSequenceModal from '../components/ContactSequenceModal';
 import TagManagementModal from '../components/TagManagementModal';
 import SearchFilter from '../components/SearchFilter';
-import CrmStatsView from '../components/CrmStatsView';
+import CrmStatsView from '../views/CrmStatsView';
 import CrmBottomBar from '../components/CrmBottomBar';
 
 import { filterContacts, enrichTreeWithCounts } from '../utils/crmUtils';

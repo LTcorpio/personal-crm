@@ -1,8 +1,8 @@
 import React from 'react';
 import { Card, Tag, Tooltip, Collapse } from 'antd';
-import { UserOutlined, PhoneOutlined, MailOutlined, EnvironmentOutlined, IdcardOutlined, WechatOutlined, QqOutlined, TikTokOutlined, QuestionCircleOutlined, CommentOutlined } from '@ant-design/icons';
+import { PhoneOutlined, MailOutlined, EnvironmentOutlined, IdcardOutlined, WechatOutlined, QqOutlined, TikTokOutlined, QuestionCircleOutlined, CommentOutlined } from '@ant-design/icons';
 import Markdown from 'react-markdown';
-import AuthenticatedAvatar from './AuthenticatedAvatar';
+import ContactAvatar from './ContactAvatar';
 
 export default function ContactCard({ contact, onClick, noBorder = false, onRelatedClick, avatarConfig }) {
   // 从全路径标签中提取叶子节点的简写用于展示
@@ -57,11 +57,6 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
 
   const ageInfo = calculateAge(contact.birthday_solar, contact.deathday);
 
-  // 判断当前状态下是否展示缩略图
-  const showThumb = avatarConfig?.showAvatarThumb !== false && contact.face_uuid;
-  // 判断是否应用了文字后备样式
-  const isTextFallback = !showThumb && avatarConfig?.avatarFallbackType && avatarConfig.avatarFallbackType !== 'default';
-
   return (
     <Card
       hoverable={!noBorder}
@@ -75,22 +70,14 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
         onClick={onClick}
       >
         {/* 头像区域 */}
-        <div className={`w-16 h-16 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center select-none border ${
-          isTextFallback ? 'bg-blue-50 border-blue-200' : 'bg-gray-100 border-gray-200'
-        }`}>
-          {(() => {
-            if (showThumb) {
-              return <AuthenticatedAvatar uuid={contact.face_uuid} alt={contact.name} className="w-full h-full object-cover" />;
-            }
-            if (avatarConfig?.avatarFallbackType === 'lastname' && contact.name) {
-              return <span className="text-[28px] font-bold text-blue-600">{contact.name.charAt(0)}</span>;
-            }
-            if (avatarConfig?.avatarFallbackType === 'fullname' && contact.name) {
-              return <span className="text-[16px] font-bold text-blue-600 px-1 text-center w-full">{contact.name}</span>;
-            }
-            return <UserOutlined className="text-2xl text-gray-400" />;
-          })()}
-        </div>
+        <ContactAvatar 
+          faceUuid={contact.face_uuid} 
+          name={contact.name} 
+          avatarConfig={avatarConfig}
+          sizeClass="w-16 h-16"
+          textClass="text-[28px]"
+          iconClass="text-2xl"
+        />
 
         {/* 基本姓名与基本标签 */}
         <div className="flex-1 min-w-0">

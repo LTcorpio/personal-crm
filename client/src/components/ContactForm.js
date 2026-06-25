@@ -569,7 +569,7 @@ export default function ContactForm({ visible, contact, tagTree = [], onCancel, 
         destroyOnClose
       >
         <div className="pt-2 pb-4">
-          <p className="text-xs text-gray-400 mb-2">请输入由 Immich 系统中解析绑定的人脸独立 UUID（对应唯一的面部聚合特征码）：</p>
+          <p className="text-xs text-gray-400 mb-2">人脸数据与 Immich 系统深度绑定，只支持从 Immich 导入，如需新增人脸请先在 Immich 创建。</p>
           <Input 
             placeholder="" 
             value={tempUuid}
