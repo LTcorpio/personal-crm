@@ -76,14 +76,20 @@ function SortableMemberItem({ field, remove, contacts, form }) {
 
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 999 : 'auto' }}
-      className={`grid grid-cols-[32px_90px_minmax(0,1.5fr)_minmax(0,1fr)_32px] gap-2 items-center bg-gray-50/50 p-2 border border-gray-100 rounded-md ${isDragging ? 'opacity-50' : ''}`}>
+      // grid-cols 分别修改各个组件的宽度
+      className={`grid grid-cols-[32px_90px_minmax(0,0.8fr)_minmax(0,1fr)_32px] gap-2 items-center bg-gray-50/50 p-2 border border-gray-100 rounded-md ${isDragging ? 'opacity-50' : ''}`}>
       <div {...attributes} {...listeners} className="cursor-grab text-center text-gray-400 hover:text-gray-600"><HolderOutlined /></div>
+
+      {/* 隐藏的 id 字段，确保提交时保留原记录的物理主键 */}
+      <Form.Item name={[field.name, 'id']} noStyle>
+        <Input type="hidden" />
+      </Form.Item>
       
       {/* 人物 ID 显示框 */}
       <Form.Item name={[field.name, 'contactId']} className="mb-0">
         <Input placeholder="未匹配" disabled className="text-center bg-gray-100/80 text-gray-400 font-mono text-xs border-dashed" />
       </Form.Item>
-      
+
       {/* 名字输入框重塑为过滤逻辑修正后的 AutoComplete */}
       <Form.Item name={[field.name, 'name']} className="mb-0" rules={[{ required: true, message: '请输入姓名' }]}>
         <AutoComplete

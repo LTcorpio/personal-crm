@@ -76,7 +76,7 @@ function DragTag({ id, text, onRemove, onEdit, tagTree }) {
             defaultValue={text.split('/')}
             open={isEditing}
             showSearch={{
-              filter: (inputValue, path) => path.some(option => option.name.toLowerCase().indexOf(inputValue.toLowerCase()) > -1)
+              filter: (inputValue, path) => path.some(option => option.name.toLowerCase().indexOf(inputValue.toLowerCase()) > -1),
             }}
             onDropdownVisibleChange={(open) => {
               if (!open) {
@@ -219,29 +219,31 @@ function EditableTagGroup({ value = [], onChange, tagTree }) {
               if (!open) setInputVisible(false);
             }}
             onSearch={(val) => setSearchValue(val)} // 实时同步搜索文本
-            notFoundContent={
-              // 当搜索不到结果时展示自定义添加按钮
-              searchValue ? (
-                <div className="p-1 text-center">
-                  <Button
-                    type="link"
-                    size="small"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      const customTag = searchValue.trim();
-                      if (customTag && !value.includes(customTag)) {
-                        onChange?.([...value, customTag]);
-                      }
-                      setTempCascaderValue([]);
-                      setSearchValue('');
-                      setInputVisible(false);
-                    }}
-                  >
-                    添加为自定义: "{searchValue}"
-                  </Button>
-                </div>
-              ) : undefined
-            }
+            dropdownRender={(menus) => (
+              <>
+                {menus}
+                {searchValue && (
+                  <div className="p-1 text-center border-t border-gray-100 bg-white">
+                    <Button
+                      type="link"
+                      size="small"
+                      onMouseDown={(e) => e.preventDefault()} // 阻止失焦导致下拉框提前收起
+                      onClick={() => {
+                        const customTag = searchValue.trim();
+                        if (customTag && !value.includes(customTag)) {
+                          onChange?.([...value, customTag]);
+                        }
+                        setTempCascaderValue([]);
+                        setSearchValue('');
+                        setInputVisible(false);
+                      }}
+                    >
+                      添加为自定义: "{searchValue}"
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
             onChange={(val) => {
               if (val && val.length > 0) {
                 const tagString = val.join('/');

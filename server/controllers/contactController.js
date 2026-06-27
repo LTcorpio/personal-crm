@@ -99,7 +99,7 @@ exports.saveContact = async (req, res) => {
                     address: c.address || "",
                     extra: c.extra || "",
                     remark: c.remark || "",
-                    former_name: formerNamesRows.map(f => String(f.name)).sort(),
+                    former_name: formerNamesRows.map(f => String(f.name)),
                     contact: oldContactMethods,
                     related: relationsRows.map(r => ({
                         id: r.id || "",
@@ -107,7 +107,7 @@ exports.saveContact = async (req, res) => {
                         relation: r.relation || "",
                         remark: r.remark || ""
                     })),
-                    tag: tagPaths.map(String).sort()
+                    tag: tagPaths.map(String),
                 };
 
                 // 规范化前端传来的新数据结构（补齐缺省值，防止因 undefined 或空字段误判为变动）
@@ -133,7 +133,7 @@ exports.saveContact = async (req, res) => {
                     address: data.address || "",
                     extra: data.extra || "",
                     remark: data.remark || "",
-                    former_name: (data.former_name || []).filter(Boolean).map(String).sort(),
+                    former_name: (data.former_name || []).filter(Boolean).map(String),
                     contact: newContactMethods,
                     related: (data.related || []).map(r => ({
                         id: r.id || r.contactId || "", // 兼容前端可能传入的 contactId
@@ -141,7 +141,7 @@ exports.saveContact = async (req, res) => {
                         relation: r.relation || "",
                         remark: r.remark || ""
                     })),
-                    tag: (data.tag || []).filter(Boolean).map(t => String(t).trim()).sort()
+                    tag: (data.tag || []).filter(Boolean).map(t => String(t).trim())
                 };
 
                 // 深度核心比对：如果字符串化后完全一致，说明用户未做任何修改，直接无视并返回成功
@@ -203,16 +203,10 @@ exports.saveContact = async (req, res) => {
             ]);
         } // 注：如果仅仅修改了电话或标签，此处将完全略过主表更新，主表 updated_at 保持不变。
 
-        // 曾用名：精准集合差异化更新
-        const oldNames = formerNamesRows.map(f => String(f.name));
+        // 曾用名：全清后按新顺序重新插入，以保持拖拽后的物理顺序
         const newNames = (data.former_name || []).filter(Boolean).map(String);
-        const namesToDelete = oldNames.filter(n => !newNames.includes(n));
-        const namesToAdd = newNames.filter(n => !oldNames.includes(n));
-
-        for (const name of namesToDelete) {
-            await dbRun(`DELETE FROM former_names WHERE contact_id = ? AND name = ?`, [finalContactId, name]);
-        }
-        for (const name of namesToAdd) {
+        await dbRun(`DELETE FROM former_names WHERE contact_id = ?`, [finalContactId]);
+        for (const name of newNames) {
             await dbRun(`INSERT INTO former_names (contact_id, name) VALUES (?, ?)`, [finalContactId, name]);
         }
 
@@ -297,14 +291,10 @@ exports.saveContact = async (req, res) => {
                 if (leafTagId) newTagIds.push(leafTagId);
             }
         }
-        const tagsToDelete = oldTagIds.filter(id => !newTagIds.includes(id));
-        const tagsToAdd = newTagIds.filter(id => !oldTagIds.includes(id));
-
-        for (const tagId of tagsToDelete) {
-            await dbRun(`DELETE FROM contact_tags WHERE contact_id = ? AND tag_id = ?`, [finalContactId, tagId]);
-        }
-        for (const tagId of tagsToAdd) {
-            await dbRun(`INSERT OR IGNORE INTO contact_tags (contact_id, tag_id) VALUES (?, ?)`, [finalContactId, tagId]);
+        // 标签全清全交
+        await dbRun(`DELETE FROM contact_tags WHERE contact_id = ?`, [finalContactId]);
+        for (const tagId of newTagIds) {
+            await dbRun(`INSERT INTO contact_tags (contact_id, tag_id) VALUES (?, ?)`, [finalContactId, tagId]);
         }
 
         await dbRun('COMMIT');
@@ -580,7 +570,7 @@ async function replaceTopicMembers(topicId, members = []) {
                 oldRow.contact_id !== newMem.contactId ||
                 oldRow.name !== newMem.name ||
                 oldRow.sort_order !== newMem.sort_order ||
-                oldRow.remark !== newMem.remark
+                (oldRow.remark || '') !== newMem.remark
             ) {
                 await dbRun(`
                     UPDATE contact_topic_members 
