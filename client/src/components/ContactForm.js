@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, Input, Radio, Button, Popconfirm, Tag, Cascader, Avatar } from 'antd';
+import { Modal, Form, Input, Radio, Button, Popconfirm, Tag, Cascader, Popover, Select } from 'antd';
 import { MinusCircleOutlined, PlusOutlined, HolderOutlined, UserOutlined, EditOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter } from '@dnd-kit/core';
-import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { contactApi } from '../api/crmApi';
 
@@ -32,126 +32,115 @@ const commonStyle = {
   transition: 'unset',
 };
 
+// 提取出的联动编辑面板，实现 Cascader 和 Input 并存且联动
+function TagEditorContent({ initialValue, tagTree, onConfirm, onCancel }) {
+  const [currentValue, setCurrentValue] = React.useState(initialValue || '');
+  const cascaderValue = currentValue ? currentValue.split('/') : [];
+
+  return (
+    <div className="flex flex-col gap-3 p-1 w-100 select-none">
+      {tagTree && tagTree.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="text-gray-400 font-medium text-xs">从分类树选择:</span>
+          <Cascader
+            options={tagTree}
+            expandTrigger="hover"
+            fieldNames={{ label: 'name', value: 'name', children: 'children' }}
+            changeOnSelect
+            value={cascaderValue}
+            onChange={(val) => {
+              setCurrentValue(val && val.length > 0 ? val.join('/') : '');
+            }}
+            placeholder="点击选择路径"
+            className="w-full"
+            size="small"
+          />
+        </div>
+      )}
+      <div className="flex flex-col gap-1">
+        <span className="text-gray-400 font-medium text-xs">自定义文本:</span>
+        <Input
+          value={currentValue}
+          onChange={(e) => setCurrentValue(e.target.value)}
+          placeholder="手动输入或微调标签"
+          className="w-full"
+          size="small"
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button size="small" onClick={onCancel}>取消</Button>
+        <Button size="small" type="primary" onClick={() => onConfirm(currentValue)}>确定</Button>
+      </div>
+    </div>
+  );
+}
+
 function DragTag({ id, text, onRemove, onEdit, tagTree }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [editValue, setEditValue] = React.useState(text);
-  const [tempCascaderValue, setTempCascaderValue] = React.useState([]);
-  const [searchValue, setSearchValue] = React.useState('');
-
-  React.useEffect(() => {
-    setEditValue(text);
-  }, [text]);
+  const [visible, setVisible] = React.useState(false);
 
   const style = transform
     ? {
         ...commonStyle,
         transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
         transition: isDragging ? 'unset' : transition,
+        zIndex: isDragging ? 9999 : 'auto',
+        opacity: isDragging ? 0.6 : 1,
+        cursor: 'default',
       }
     : commonStyle;
 
-  const handleEditConfirm = () => {
-    if (editValue.trim() && editValue !== text) {
-      onEdit(text, editValue.trim());
-    } else {
-      setEditValue(text);
-    }
-    setIsEditing(false);
-  };
-
   return (
-    <div ref={setNodeRef} style={{...style, cursor: 'default'}} {...attributes} className="select-none">
-      {isEditing ? (
-        tagTree && tagTree.length > 0 ? (
-          <Cascader
-            options={tagTree}
-            expandTrigger="hover"
-            fieldNames={{ label: 'name', value: 'name', children: 'children' }}
-            changeOnSelect
-            size="small"
-            className="w-48"
-            placeholder="选择标签"
-            value={tempCascaderValue}
-            defaultValue={text.split('/')}
-            open={isEditing}
-            showSearch={{
-              filter: (inputValue, path) => path.some(option => option.name.toLowerCase().indexOf(inputValue.toLowerCase()) > -1),
-            }}
-            onDropdownVisibleChange={(open) => {
-              if (!open) {
-                if (tempCascaderValue && tempCascaderValue.length > 0) {
-                  const newTag = tempCascaderValue.join('/');
-                  if (newTag !== text) {
-                    onEdit(text, newTag);
-                  }
-                }
-                setIsEditing(false);
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex gap-2 items-center mb-2 bg-purple-50/50 p-2 rounded w-full"
+    >
+      {/* 拖拽把手 */}
+      <div {...attributes} {...listeners} className="cursor-grab pr-1 text-gray-400 hover:text-gray-600 active:cursor-grabbing">
+        <HolderOutlined />
+      </div>
+      
+      {/* 点击触发 Popover 编辑 */}
+      <Popover
+        open={visible}
+        onOpenChange={setVisible}
+        trigger="click"
+        destroyTooltipOnHide
+        placement="bottomLeft"
+        content={
+          <TagEditorContent
+            initialValue={text}
+            tagTree={tagTree}
+            onCancel={() => setVisible(false)}
+            onConfirm={(newValue) => {
+              if (newValue.trim() && newValue.trim() !== text) {
+                onEdit(text, newValue.trim());
               }
+              setVisible(false);
             }}
-            onChange={(val) => {
-              setTempCascaderValue(val || []);
-            }}
-            onSearch={(val) => setSearchValue(val)}
-            notFoundContent={
-              searchValue ? (
-                <div className="p-1 text-center">
-                  <Button
-                    type="link"
-                    size="small"
-                    onMouseDown={(e) => e.preventDefault()} // 阻止失焦导致下拉框提前收起
-                    onClick={() => {
-                      onEdit(text, searchValue.trim());
-                      setTempCascaderValue([]); // 清空，防止触发常规 visibleChange 保存
-                      setSearchValue('');
-                      setIsEditing(false);
-                    }}
-                  >
-                    改为自定义: "{searchValue}"
-                  </Button>
-                </div>
-              ) : undefined
-            }
           />
-        ) : (
-          <Input
-            size="small"
-            className="w-48 h-[22px] text-xs px-1"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={handleEditConfirm}
-            onPressEnter={handleEditConfirm}
-            autoFocus
-          />
-        )
-      ) : (
-        <Tag closable onClose={onRemove} color="purple" className="mr-0 inline-flex items-center gap-1">
-          <span {...listeners} className="cursor-grab flex items-center pr-0.5 active:cursor-grabbing">
-            <HolderOutlined />
-          </span>
-          <span 
-            className="cursor-edit hover:text-purple-700 font-medium" 
-            title="点击修改文本"
-            onClick={(e) => {
-              e.stopPropagation();
-              setTempCascaderValue(text.split('/'));
-              setSearchValue('');
-              setIsEditing(true);
-            }}
-          >
-            {text}
-          </span>
-        </Tag>
-      )}
+        }
+      >
+        <span 
+          className="cursor-pointer font-medium text-purple-700 hover:bg-purple-100/60 px-2 py-0.5 rounded transition-all select-none"
+          title="点击编辑标签"
+        >
+          {text}
+        </span>
+      </Popover>
+
+      {/* 右侧删除按钮 */}
+      <MinusCircleOutlined 
+        className="text-red-500 cursor-pointer ml-auto text-lg hover:text-red-700" 
+        onClick={onRemove} 
+      />
     </div>
   );
 }
 
 function EditableTagGroup({ value = [], onChange, tagTree }) {
-  const [inputValue, setInputValue] = React.useState('');
-  const [inputVisible, setInputVisible] = React.useState(false);
-  const [tempCascaderValue, setTempCascaderValue] = React.useState([]);
-  const [searchValue, setSearchValue] = React.useState('');
+  const [addVisible, setAddVisible] = React.useState(false);
 
   const handleDragEnd = (event) => {
     const { active, over } = event;
@@ -174,19 +163,10 @@ function EditableTagGroup({ value = [], onChange, tagTree }) {
     onChange?.([...newValue]);
   };
 
-  // 原文本标签的新增确认逻辑
-  const handleInputConfirm = () => {
-    if (inputValue && !value.includes(inputValue)) {
-      onChange?.([...value, inputValue]);
-    }
-    setInputValue('');
-    setInputVisible(false);
-  };
-
   return (
-    <div className="flex flex-wrap gap-y-2 gap-x-1 items-center border border-gray-300 p-1.5 rounded-md min-h-[32px] bg-white">
+    <div className="flex flex-col w-full">
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={value} strategy={horizontalListSortingStrategy}>
+        <SortableContext items={value} strategy={verticalListSortingStrategy}>
           {value.map((tag) => (
             <DragTag 
               key={tag} 
@@ -200,84 +180,36 @@ function EditableTagGroup({ value = [], onChange, tagTree }) {
         </SortableContext>
       </DndContext>
 
-      {inputVisible ? (
-        // 有级联树时用 Cascader，没有时用普通 Input
-        tagTree && tagTree.length > 0 ? (
-          <Cascader
-            options={tagTree}
-            expandTrigger="hover"
-            fieldNames={{ label: 'name', value: 'name', children: 'children' }}
-            changeOnSelect
-            placeholder="搜索或选择标签"
-            size="small"
-            className="w-48"
-            open={inputVisible}
-            showSearch={{
-              filter: (inputValue, path) => path.some(option => option.name.toLowerCase().indexOf(inputValue.toLowerCase()) > -1)
-            }}
-            onDropdownVisibleChange={(open) => {
-              if (!open) setInputVisible(false);
-            }}
-            onSearch={(val) => setSearchValue(val)} // 实时同步搜索文本
-            dropdownRender={(menus) => (
-              <>
-                {menus}
-                {searchValue && (
-                  <div className="p-1 text-center border-t border-gray-100 bg-white">
-                    <Button
-                      type="link"
-                      size="small"
-                      onMouseDown={(e) => e.preventDefault()} // 阻止失焦导致下拉框提前收起
-                      onClick={() => {
-                        const customTag = searchValue.trim();
-                        if (customTag && !value.includes(customTag)) {
-                          onChange?.([...value, customTag]);
-                        }
-                        setTempCascaderValue([]);
-                        setSearchValue('');
-                        setInputVisible(false);
-                      }}
-                    >
-                      添加为自定义: "{searchValue}"
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-            onChange={(val) => {
-              if (val && val.length > 0) {
-                const tagString = val.join('/');
-                if (!value.includes(tagString)) {
-                  onChange?.([...value, tagString]);
-                }
+      <Popover
+        open={addVisible}
+        onOpenChange={setAddVisible}
+        trigger="click"
+        destroyTooltipOnHide
+        placement="bottomLeft"
+        content={
+          <TagEditorContent
+            initialValue=""
+            tagTree={tagTree}
+            onCancel={() => setAddVisible(false)}
+            onConfirm={(newValue) => {
+              const cleaned = newValue.trim();
+              if (cleaned && !value.includes(cleaned)) {
+                onChange?.([...value, cleaned]);
               }
-              setInputVisible(false);
+              setAddVisible(false);
             }}
           />
-        ) : (
-          <Input
-            type="text"
-            size="small"
-            className="w-48"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onBlur={handleInputConfirm}
-            onPressEnter={handleInputConfirm}
-            autoFocus
-          />
-        )
-      ) : (
-        <Tag 
-          onClick={() => {
-            setTempCascaderValue([]);
-            setSearchValue('');
-            setInputVisible(true);
-          }} 
-          className="border-dashed bg-gray-50 cursor-pointer"
+        }
+      >
+        <Button 
+          type="dashed" 
+          block 
+          icon={<PlusOutlined />} 
+          className="mt-1"
         >
-          <PlusOutlined /> 新增
-        </Tag>
-      )}
+          新增标签
+        </Button>
+      </Popover>
     </div>
   );
 }
@@ -431,22 +363,19 @@ export default function ContactForm({ visible, contact, tagTree = [], onCancel, 
               {/* 头像：移动端稍缩小至 20(80px) 更精致，桌面端保持 28(112px) */}
               <div 
                 onClick={openUuidEdit}
-                className="relative w-20 h-20 md:w-28 md:h-28 rounded-full overflow-hidden border-2 border-purple-100 hover:border-purple-400 cursor-pointer group shadow-sm bg-gray-50 flex items-center justify-center transition-all shrink-0"
+                className="relative w-20 h-20 md:w-28 md:h-28 rounded-full overflow-hidden border-2 cursor-pointer group shadow-sm bg-gray-50 flex items-center justify-center transition-all shrink-0"
                 title="点击配置人脸 UUID"
               >
                 {avatarUrl ? (
                   <img 
                     src={avatarUrl} 
-                    alt="Face Avatar" 
+                    alt="人脸缩略图" 
                     className="w-full h-full object-cover"
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
-                ) : null}
-                <div className="absolute inset-0 flex items-center justify-center text-gray-400 bg-gray-100/50 -z-10">
-                  <UserOutlined className="text-2xl md:text-3xl" />
-                </div>
+                ) : <UserOutlined className="text-gray-400 text-3xl md:text-4xl" />}
                 {/* Hover 遮罩层 */}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-xs font-medium transition-opacity gap-1">
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-md font-medium transition-opacity gap-1">
                   <EditOutlined className="text-base" />
                   <span>修改头像</span>
                 </div>
@@ -512,7 +441,13 @@ export default function ContactForm({ visible, contact, tagTree = [], onCancel, 
               <EditableTagGroup tagTree={tagTree} />
             </Form.Item>
             <Form.Item name="former_name" label="曾用名" className="flex-1 mb-0">
-              <EditableTagGroup />
+              <Select
+                mode="tags"
+                style={{ width: '100%' }}
+                placeholder="输入曾用名后回车添加"
+                tokenSeparators={[',', '，']} // 支持逗号自动切分标签
+                options={[]} // 动态标签页默认无需预设选项
+              />
             </Form.Item>
           </div>
           
@@ -555,7 +490,7 @@ export default function ContactForm({ visible, contact, tagTree = [], onCancel, 
           </Form.List>
 
           <Form.Item name="extra" label="扩展信息" className="mt-4"><Input.TextArea rows={6} placeholder="# 教育经历&#10;- XX大学 计算机科学&#10;# 工作经历&#10;- XX公司 架构师" /></Form.Item>
-          <Form.Item name="remark" label="系统备注"><Input.TextArea rows={2} /></Form.Item>
+          <Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item>
         </Form>
       </Modal>
 

@@ -5,7 +5,10 @@ const BACKEND_PORT = process.env.REACT_APP_BACKEND_PORT;
 const baseURL = `http://${currentHostname}:${BACKEND_PORT}/api`;
 
 const api = axios.create({
-  baseURL: baseURL,
+  // 开发：baseURL
+  // baseURL: baseURL,
+  // 生产：使用相对路径
+  baseURL: '/api',
 });
 
 // ==========================================

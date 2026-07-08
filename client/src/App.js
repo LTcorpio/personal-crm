@@ -5,7 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header';
 import LoginPage from './pages/LoginPage';
 import CrmPage from './pages/CrmPage';
-import RelativeCalculatorPage from './pages/RelationshipCalculator';
+import ToolsPage from './pages/ToolsPage';
 
 export default function App() {
   // 检查本地是否存在 Token
@@ -87,8 +87,8 @@ export default function App() {
               />
               {/* 亲戚计算器页面 */}
               <Route 
-                path="/calculator" 
-                element={<RelativeCalculatorPage />} 
+                path="/tools" 
+                element={<ToolsPage />} 
               />
             </Routes>
           </div>

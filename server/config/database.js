@@ -2,8 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-const defaultDbPath = path.resolve(__dirname, '../crm.db'); 
-const dbPath = process.env.DB_PATH || defaultDbPath;
+const dbPath = process.env.DB_PATH;
 
 const dbDir = path.dirname(dbPath);
 if (!fs.existsSync(dbDir)) {

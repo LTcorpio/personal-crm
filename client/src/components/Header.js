@@ -15,7 +15,8 @@ import {
   UserSwitchOutlined,
   LogoutOutlined,
   LockOutlined,
-  UserOutlined
+  UserOutlined,
+  ToolOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -134,16 +135,16 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
         {/* 桌面端页面导航：中屏及以上显示 */}
         <div className="hidden lg:block">
           <Radio.Group 
-            value={isCrmPage ? 'crm' : 'calculator'} 
-            onChange={(e) => navigate(e.target.value === 'crm' ? '/' : '/calculator')}
+            value={isCrmPage ? 'crm' : 'tools'} 
+            onChange={(e) => navigate(e.target.value === 'crm' ? '/' : '/tools')}
             optionType="button"
             buttonStyle="solid"
           >
             <Radio.Button value="crm"><UserSwitchOutlined />
               <span className='hidden xl:inline ml-1.5'>人脉管理</span>
             </Radio.Button>
-            <Radio.Button value="calculator"><CalculatorOutlined />
-              <span className='hidden xl:inline ml-1.5'>亲戚计算器</span>
+            <Radio.Button value="tools"><ToolOutlined />
+              <span className='hidden xl:inline ml-1.5'>实用工具</span>
             </Radio.Button>
           </Radio.Group>
         </div>
@@ -236,9 +237,9 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
           <div>
             <div className="text-xs font-semibold text-gray-400 mb-2 tracking-wider">当前系统</div>
             <Radio.Group 
-              value={isCrmPage ? 'crm' : 'calculator'} 
+              value={isCrmPage ? 'crm' : 'tools'} 
               onChange={(e) => {
-                navigate(e.target.value === 'crm' ? '/' : '/calculator');
+                navigate(e.target.value === 'crm' ? '/' : '/tools');
                 setMobileMenuVisible(false);
               }}
               optionType="button"
@@ -246,7 +247,7 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
               className="w-full flex"
             >
               <Radio.Button value="crm" className="flex-1 text-center"><TeamOutlined /> 人脉管理</Radio.Button>
-              <Radio.Button value="calculator" className="flex-1 text-center"><CalculatorOutlined /> 亲戚计算器</Radio.Button>
+              <Radio.Button value="tools" className="flex-1 text-center"><ToolOutlined /> 实用工具</Radio.Button>
             </Radio.Group>
           </div>
 
