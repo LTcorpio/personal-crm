@@ -1,14 +1,13 @@
 import axios from 'axios';
 
-const currentHostname = window.location.hostname;
-const BACKEND_PORT = process.env.REACT_APP_BACKEND_PORT;
-const baseURL = `http://${currentHostname}:${BACKEND_PORT}/api`;
+// 根据构建环境自动切换 baseURL，无需手动注释代码
+// 开发环境 (npm start)：前端与后端分别运行在不同端口，需通过完整 URL 跨端口请求
+// 生产环境 (npm run build)：前端静态资源由后端托管，使用相对路径即可
+const isDev = process.env.NODE_ENV === 'development';
+const devBaseURL = `http://${window.location.hostname}:${process.env.REACT_APP_BACKEND_PORT}/api`;
 
 const api = axios.create({
-  // 开发：baseURL
-  // baseURL: baseURL,
-  // 生产：使用相对路径
-  baseURL: '/api',
+  baseURL: isDev ? devBaseURL : '/api',
 });
 
 // ==========================================

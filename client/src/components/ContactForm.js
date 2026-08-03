@@ -361,7 +361,7 @@ export default function ContactForm({ visible, contact, tagTree = [], onCancel, 
             <div className="flex flex-row md:flex-col items-center gap-4 md:gap-3 w-full md:w-48 border-b md:border-b-0 md:border-r border-gray-100 pb-4 md:pb-0 md:pr-4 shrink-0">
               
               {/* 头像：移动端稍缩小至 20(80px) 更精致，桌面端保持 28(112px) */}
-              <div 
+              <div
                 onClick={openUuidEdit}
                 className="relative w-20 h-20 md:w-28 md:h-28 rounded-full overflow-hidden border-2 cursor-pointer group shadow-sm bg-gray-50 flex items-center justify-center transition-all shrink-0"
                 title="点击配置人脸 UUID"

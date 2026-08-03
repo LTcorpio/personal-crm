@@ -309,7 +309,6 @@ exports.saveContact = async (req, res) => {
 // 2. 获取联系人详情与列表（带关键字及标签筛选）
 exports.getContacts = async (req, res) => {
     const { search, tag, id } = req.query;
-    const host = req.get('host');
 
     try {
         let sql = `SELECT * FROM contacts WHERE 1=1`;
@@ -384,7 +383,7 @@ exports.getContacts = async (req, res) => {
 
             result.push({
                 id: c.id,
-                face_thumb_url: c.face_uuid ? `http://${host}/api/proxy-face/${c.face_uuid}` : "",
+                face_thumb_url: c.face_uuid ? `/api/proxy-face/${c.face_uuid}` : "",
                 face_uuid: c.face_uuid || "",
                 tag: tagPaths,
                 name: c.name,
