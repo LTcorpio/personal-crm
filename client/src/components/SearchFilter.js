@@ -23,7 +23,7 @@ const OPTIONS = [
 const DEFAULT_VALUES = ['name', 'location', 'address', 'contact', 'remark', 'extra'];
 const ALL_VALUES = OPTIONS.map(o => o.value);
 
-export default function SearchFilter({ 
+export default function SearchFilter({
   searchTxt,
   setSearchTxt,
   searchFields = [],
@@ -143,8 +143,8 @@ export default function SearchFilter({
           placement="bottomLeft"
           overlayClassName="search-filter-popover"
         >
-          <Button 
-            icon={<FilterOutlined />} 
+          <Button
+            icon={<FilterOutlined />}
             size='large'
           >
             搜索范围 {searchFields.length < OPTIONS.length && `(${searchFields.length})`}

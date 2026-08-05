@@ -19,7 +19,7 @@ import { contactApi, tagApi, topicApi } from '../api/crmApi';
 
 const { Content, Sider } = Layout;
 
-export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVisible, setFormVisible, editingContact, setEditingContact }) {
+export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVisible, setFormVisible, editingContact, setEditingContact, editMode = true, setEditMode }) {
   const [contacts, setContacts] = useState([]);
   const [tagTree, setTagTree] = useState([]);
   const [topics, setTopics] = useState([]);
@@ -92,6 +92,8 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   
   const [detailContact, setDetailContact] = useState(null);
 
+  // 编辑模式状态由父组件 App.js 统一管理（Header 与 CrmPage 共享），默认开启
+
   const handleColumnConfigsChange = (newConfigs) => {
     setColumnConfigs(newConfigs);
     localStorage.setItem('crm_column_configs', JSON.stringify(newConfigs));
@@ -140,6 +142,16 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
     } else {
       message.warning('未找到该关联人的详细档案');
     }
+  };
+
+  // 打开人员编辑弹窗：仅在编辑模式下允许调出，否则降级为只读详情视图
+  const handleOpenEdit = (contact) => {
+    if (!editMode) {
+      setDetailContact(contact);
+      return;
+    }
+    setEditingContact(contact);
+    setFormVisible(true);
   };
 
   const handleSaveContact = async (fullData) => {
@@ -254,10 +266,10 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
       className="h-full flex flex-col shrink-0 overflow-hidden"
     >
       <div className="flex-1 min-h-0">
-        <Sidebar 
-          ref={sidebarRef}                     
-          mode={crmFeatureMode}                
-          hideHeader={hideHeader}              
+        <Sidebar
+          ref={sidebarRef}
+          mode={crmFeatureMode}
+          hideHeader={hideHeader}
           contacts={contacts}
           processedTagTree={processedTagTree}
           selectedTagPath={selectedTagPath}
@@ -269,6 +281,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
           setSelectedTopicId={setSelectedTopicId}
           onSaveTopic={handleSaveTopic}
           onDeleteTopic={handleDeleteTopic}
+          editMode={editMode}
         />
       </div>
 
@@ -363,12 +376,13 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
           title={<SidebarTitle mode={crmFeatureMode} />}
           // 2. 动态分发 Drawer 的右侧功能区按钮
           extra={
-            <SidebarExtra 
+            <SidebarExtra
               mode={crmFeatureMode}
               selectedTagPath={selectedTagPath}
               setSelectedTagPath={setSelectedTagPath}
               onManageTags={() => setTagManageVisible(true)}
               onManageTopics={() => sidebarRef.current?.openManageModal()} // 👈 通过单 ref 直接唤起主题管理
+              editMode={editMode}
             />
           }
           className='select-none'
@@ -379,7 +393,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         
         {/* 右侧主视窗内容区 */}
         <Content className="flex-1 min-w-0 flex flex-col h-full bg-gray-50/50">
-          <SearchFilter 
+          <SearchFilter
             searchTxt={searchTxt}
             setSearchTxt={setSearchTxt}
             searchFields={searchFields}
@@ -397,7 +411,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                       <ContactCard
                         key={item.id}
                         contact={item}
-                        onClick={() => { setEditingContact(item); setFormVisible(true); }}
+                        onClick={() => handleOpenEdit(item)}
                         onRelatedClick={handleRelatedClick}
                         avatarConfig={avatarConfig}
                       />
@@ -425,6 +439,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                     setFormVisible={setFormVisible}
                     handleDeleteContact={handleDeleteContact}
                     avatarConfig={avatarConfig}
+                    editMode={editMode}
                   />
                 )}
                 <div className="text-center text-gray-400 text-xs mt-8 pb-4 select-none tracking-wide">
@@ -496,9 +511,10 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
       >
         {detailContact && (
           <div className="pt-4">
-            <ContactCard 
-              contact={detailContact} 
-              onClick={() => { 
+            <ContactCard
+              contact={detailContact}
+              onClick={() => {
+                if (!editMode) return; // 只读模式下不允许从详情视图跳转到编辑弹窗
                 const currentContact = detailContact;
                 setDetailContact(null);
                 setEditingContact(currentContact);

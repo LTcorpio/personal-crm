@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button, Radio, Select, Drawer, Segmented, Divider, Form, Modal, Input, message, Dropdown, Avatar } from 'antd';
+import { Button, Radio, Select, Drawer, Segmented, Divider, Form, Modal, Input, message, Dropdown, Avatar, Tooltip } from 'antd';
 import {
   PlusOutlined,
   AppstoreOutlined,
@@ -16,13 +16,15 @@ import {
   LogoutOutlined,
   LockOutlined,
   UserOutlined,
-  ToolOutlined
+  ToolOutlined,
+  EditOutlined,
+  EyeOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { authApi } from '../api/crmApi';
 
-export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFeatureMode, onAddContact }) {
+export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFeatureMode, editMode = true, onToggleEditMode, onAddContact }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -173,16 +175,18 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
           <>
             {/* 移动端保留为 Icon 按钮，大屏显示完整文字 */}
             {crmFeatureMode === 'tags' && (
-              <Button 
-                type="primary" 
-                icon={<PlusOutlined />} 
-                className="rounded-lg font-medium shadow-sm flex items-center justify-center" 
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                className="rounded-lg font-medium shadow-sm flex items-center justify-center"
                 onClick={onAddContact}
+                disabled={!editMode}
+                title={editMode ? '新增联系人' : '只读模式下不可新增'}
               >
                 <span className="hidden xl:inline">新增联系人</span>
               </Button>
             )}
-            
+
             {/* 桌面端视图切换：中屏及以上显示 */}
             <div className="hidden lg:block">
               <Segmented
@@ -195,6 +199,20 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
                 onChange={e => setViewMode(e)}
               />
             </div>
+
+            {/* 编辑模式开关：仅 CRM 页面展示，放在右侧操作区 */}
+            {onToggleEditMode && (
+              <Tooltip title={editMode ? '当前为编辑模式，点击切换为只读' : '当前为只读模式，点击开启编辑'}>
+                <Button
+                  type={editMode ? 'primary' : 'default'}
+                  icon={editMode ? <EditOutlined /> : <EyeOutlined />}
+                  onClick={() => onToggleEditMode(!editMode)}
+                  className="flex items-center justify-center"
+                >
+                  <span className="hidden xl:inline">{editMode ? '编辑模式' : '只读模式'}</span>
+                </Button>
+              </Tooltip>
+            )}
           </>
         )}
         
@@ -290,6 +308,25 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
                 onChange={e => setViewMode(e)}
               />
             </div>
+          )}
+
+          {/* 模块3.5：编辑模式开关 */}
+          {isCrmPage && crmFeatureMode !== 'stats' && onToggleEditMode && (
+            <>
+              <Divider className="my-1 border-gray-100" />
+              <div>
+                <div className="text-xs font-semibold text-gray-400 mb-2 tracking-wider">编辑模式</div>
+                <Segmented
+                  block
+                  value={editMode}
+                  onChange={(v) => onToggleEditMode(v)}
+                  options={[
+                    { value: true, icon: <EditOutlined />, label: '编辑模式' },
+                    { value: false, icon: <EyeOutlined />, label: '只读模式' },
+                  ]}
+                />
+              </div>
+            </>
           )}
 
           <Divider className="my-1 border-gray-100" />

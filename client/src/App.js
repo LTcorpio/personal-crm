@@ -29,6 +29,9 @@ export default function App() {
     localStorage.setItem('crm_feature_mode', mode);
   };
 
+  // 编辑模式开关：关闭后不可管理标签/主题，也无法调出人员编辑弹窗
+  const [editMode, setEditMode] = useState(true);
+
   // ==========================================
   // 情况 A：未登录，渲染独立密码保护界面
   // ==========================================
@@ -55,12 +58,14 @@ export default function App() {
       <BrowserRouter>
         <div className="h-screen bg-slate-50 text-slate-800 select-none flex flex-col">
           {/* 顶部主导航栏 */}
-          <Header 
-            viewMode={viewMode} 
-            setViewMode={setViewMode} 
+          <Header
+            viewMode={viewMode}
+            setViewMode={setViewMode}
             crmFeatureMode={crmFeatureMode}
             setCrmFeatureMode={setCrmFeatureMode}
-            onAddContact={() => { setEditingContact(null); setFormVisible(true); }} 
+            editMode={editMode}
+            onToggleEditMode={setEditMode}
+            onAddContact={() => { setEditingContact(null); setFormVisible(true); }}
           />
 
           {/* 路由视图 */}
@@ -70,14 +75,16 @@ export default function App() {
               <Route 
                 path="/" 
                 element={
-                  <CrmPage 
-                    viewMode={viewMode} 
+                  <CrmPage
+                    viewMode={viewMode}
                     setViewMode={setViewMode}
                     crmFeatureMode={crmFeatureMode}
                     formVisible={formVisible}
                     setFormVisible={setFormVisible}
                     editingContact={editingContact}
                     setEditingContact={setEditingContact}
+                    editMode={editMode}
+                    setEditMode={setEditMode}
                   />
                 } 
               />

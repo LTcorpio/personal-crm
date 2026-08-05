@@ -127,22 +127,22 @@ export function SidebarTitle({ mode }) {
 }
 
 // --- 统一导出的功能操作组件 ---
-export function SidebarExtra({ mode, selectedTagPath, setSelectedTagPath, onManageTags, onManageTopics }) {
+export function SidebarExtra({ mode, selectedTagPath, setSelectedTagPath, onManageTags, onManageTopics, editMode = true }) {
   if (mode === 'topics') {
     return (
-      <Button type="text" size="small" icon={<SettingOutlined />} onClick={onManageTopics}>管理主题</Button>
+      <Button type="text" size="small" icon={<SettingOutlined />} onClick={onManageTopics} disabled={!editMode} title={editMode ? '管理主题' : '只读模式下不可管理'}>管理主题</Button>
     );
   }
   return (
     <div className="flex items-center gap-1 shrink-0">
-      <Button icon={<SettingOutlined />} type="text" size="small" onClick={onManageTags} title="管理标签">管理标签</Button>
+      <Button icon={<SettingOutlined />} type="text" size="small" onClick={onManageTags} title={editMode ? '管理标签' : '只读模式下不可管理'} disabled={!editMode}>管理标签</Button>
       <Tooltip title={selectedTagPath === '__NO_TAGS__' ? '取消无标签筛选' : '筛选无标签人员'}>
-        <Button 
-          type={selectedTagPath === '__NO_TAGS__' ? 'primary' : 'default'} 
-          size="small" 
+        <Button
+          type={selectedTagPath === '__NO_TAGS__' ? 'primary' : 'default'}
+          size="small"
           danger={selectedTagPath === '__NO_TAGS__'}
           icon={<UserDeleteOutlined />}
-          onClick={() => setSelectedTagPath(selectedTagPath === '__NO_TAGS__' ? null : '__NO_TAGS__')} 
+          onClick={() => setSelectedTagPath(selectedTagPath === '__NO_TAGS__' ? null : '__NO_TAGS__')}
         />
       </Tooltip>
       <Tooltip title="清除选择">
@@ -159,7 +159,9 @@ const Sidebar = forwardRef(function Sidebar({
   // 标签相关属性
   processedTagTree = [], selectedTagPath, setSelectedTagPath, onManageTags,
   // 主题相关属性
-  topics = [], setTopics, selectedTopicId, setSelectedTopicId, onSaveTopic, onDeleteTopic
+  topics = [], setTopics, selectedTopicId, setSelectedTopicId, onSaveTopic, onDeleteTopic,
+  // 编辑模式开关
+  editMode = true
 }, ref) {
   const [form] = Form.useForm();
   const [modalOpen, setModalOpen] = useState(false);
@@ -170,7 +172,19 @@ const Sidebar = forwardRef(function Sidebar({
 
   useEffect(() => { setManagedTopics(topics); }, [topics]);
 
-  const handleOpenManage = () => { setManagedTopics(topics); setManageModalOpen(true); };
+  // 只读模式开启时，强制关闭所有主题管理/编辑弹窗，避免残留可操作界面
+  useEffect(() => {
+    if (!editMode) {
+      setManageModalOpen(false);
+      setModalOpen(false);
+    }
+  }, [editMode]);
+
+  const handleOpenManage = () => {
+    if (!editMode) return; // 只读模式下禁止唤起主题管理弹窗
+    setManagedTopics(topics);
+    setManageModalOpen(true);
+  };
   
   // 仅暴露单个统一的弹窗管理入口
   useImperativeHandle(ref, () => ({ openManageModal: handleOpenManage }));
@@ -233,7 +247,7 @@ const Sidebar = forwardRef(function Sidebar({
       {!hideHeader && (
         <div className="flex items-center justify-between p-4 pb-2 border-b border-gray-100">
           <SidebarTitle mode={mode} />
-          <SidebarExtra mode={mode} selectedTagPath={selectedTagPath} setSelectedTagPath={setSelectedTagPath} onManageTags={onManageTags} onManageTopics={handleOpenManage} />
+          <SidebarExtra mode={mode} selectedTagPath={selectedTagPath} setSelectedTagPath={setSelectedTagPath} onManageTags={onManageTags} onManageTopics={handleOpenManage} editMode={editMode} />
         </div>
       )}
 

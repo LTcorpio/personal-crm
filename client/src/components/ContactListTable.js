@@ -9,7 +9,8 @@ export default function ContactListTable({
   setEditingContact,
   setFormVisible,
   handleDeleteContact,
-  avatarConfig
+  avatarConfig,
+  editMode = true
 }) {
   const columns = [
     ...columnConfigs
@@ -26,9 +27,9 @@ export default function ContactListTable({
                 className="flex justify-center items-center w-full cursor-pointer"
                 onClick={() => setDetailContact(record)}
               >
-                <ContactAvatar 
-                  faceUuid={record.face_uuid} 
-                  name={record.name} 
+                <ContactAvatar
+                  faceUuid={record.face_uuid}
+                  name={record.name}
                   avatarConfig={avatarConfig}
                   sizeClass="w-9 h-9"
                   textClass="text-[16px]"
@@ -55,7 +56,8 @@ export default function ContactListTable({
           return text || '-';
         },
       })),
-    {
+    // 只在编辑模式下展示操作列，只读模式下隐藏避免空列
+    ...(editMode ? [{
       title: '操作',
       key: 'action',
       align: 'center',
@@ -85,7 +87,7 @@ export default function ContactListTable({
           </Popconfirm> */}
         </Space>
       ),
-    },
+    }] : []),
   ];
 
   return (
