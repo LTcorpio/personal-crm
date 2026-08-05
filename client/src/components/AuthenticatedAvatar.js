@@ -40,3 +40,14 @@ export default function AuthenticatedAvatar({ uuid, alt = '', className }) {
     <img src={avatarUrl} alt={alt} className={className} onError={(e) => { e.target.style.display = 'none'; }} />
   ) : null;
 }
+
+// 对外暴露：按 uuid 获取头像 URL，命中缓存则直接返回，否则请求并缓存
+export function getAvatarUrl(uuid) {
+  if (!uuid) return Promise.resolve(null);
+  if (avatarCache.has(uuid)) return Promise.resolve(avatarCache.get(uuid));
+  return contactApi.getAvatar(uuid).then((res) => {
+    const url = URL.createObjectURL(res.data);
+    avatarCache.set(uuid, url);
+    return url;
+  });
+}

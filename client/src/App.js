@@ -30,7 +30,12 @@ export default function App() {
   };
 
   // 编辑模式开关：关闭后不可管理标签/主题，也无法调出人员编辑弹窗
-  const [editMode, setEditMode] = useState(true);
+  // 默认只读模式（false），状态持久化到 localStorage
+  const [editMode, setEditModeState] = useState(() => localStorage.getItem('crm_edit_mode') === 'true');
+  const setEditMode = (mode) => {
+    setEditModeState(mode);
+    localStorage.setItem('crm_edit_mode', String(mode));
+  };
 
   // ==========================================
   // 情况 A：未登录，渲染独立密码保护界面
