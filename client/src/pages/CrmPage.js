@@ -462,12 +462,13 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
       </Layout>
       )}
 
-      <ContactForm 
-        visible={formVisible} 
-        contact={editingContact} 
+      <ContactForm
+        visible={formVisible}
+        contact={editingContact}
         tagTree={tagTree}
-        onCancel={() => { setFormVisible(false); setEditingContact(null); }} 
-        onSave={handleSaveContact} 
+        contacts={contacts}
+        onCancel={() => { setFormVisible(false); setEditingContact(null); }}
+        onSave={handleSaveContact}
         onDelete={handleDeleteContact}
       />
       <ColumnSetting

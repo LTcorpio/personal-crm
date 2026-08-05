@@ -1,13 +1,59 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, Input, Radio, Button, Popconfirm, Tag, Cascader, Popover, Select } from 'antd';
+import { Modal, Form, Input, Radio, Button, Popconfirm, Tag, Cascader, Popover, Select, AutoComplete } from 'antd';
 import { MinusCircleOutlined, PlusOutlined, HolderOutlined, UserOutlined, EditOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { contactApi } from '../api/crmApi';
 
-function DragRow({ id, children }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+const commonStyle = {
+  cursor: 'move',
+  transition: 'unset',
+};
+
+// 关联人编辑行：姓名输入框重塑为 AutoComplete，下拉选择时自动回填系统ID
+function RelatedRow({ field, remove, contacts, form, duplicateIds }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: field.key });
+
+  // 监听本行的系统ID，用于判断是否与其它行重复
+  const rowId = Form.useWatch(['related', field.name, 'id'], form);
+  const isDuplicate = rowId && duplicateIds && duplicateIds.has(String(rowId));
+
+  // 1. 建立联想下拉菜单的候选数据（注入唯一后缀，解决冲突核心）
+  const autoCompleteOptions = React.useMemo(() => {
+    return contacts.map(c => ({
+      // 将 value 拼接上 ID 确保全局唯一，彻底防止 AntD 内部 Key 覆盖引发的 Bug
+      value: `${c.name} #ID:${c.id}`,
+      id: String(c.id),
+      realName: c.name, // 留存一份纯净的名字供后续回填
+      label: (
+        <div className="flex justify-between items-center w-full">
+          <span className="font-medium text-gray-700">{c.name}</span>
+          <span className="text-gray-400 font-mono text-xs">ID: {c.id}</span>
+        </div>
+      )
+    }));
+  }, [contacts]);
+
+  // 2. 当用户从下拉列表中显式选择某人时触发：此时才锁定 ID
+  const handleSelect = (value, option) => {
+    form.setFieldValue(['related', field.name, 'id'], option.id);
+    form.setFieldValue(['related', field.name, 'name'], option.realName); // 强行将输入框改回纯净名字，不把后缀露给用户
+  };
+
+  // 3. 当用户打字、清空或选择导致输入框变更时触发
+  const handleChange = (value) => {
+    // 如果带有唯一标识后缀，说明是由点击下拉菜单触发的二次变更，直接解析并同步表单
+    if (value && value.includes(' #ID:')) {
+      const [realName, contactId] = value.split(' #ID:');
+      form.setFieldValue(['related', field.name, 'id'], contactId);
+      form.setFieldValue(['related', field.name, 'name'], realName);
+      return;
+    }
+
+    // 允许同名不同人：手打纯文本时不自动锁定 ID，留空由用户自行决定是否下拉选择
+    form.setFieldValue(['related', field.name, 'id'], '');
+  };
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -17,20 +63,42 @@ function DragRow({ id, children }) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex gap-2 items-start sm:items-center mb-2 bg-purple-50/50 p-2 rounded w-full">
+    <div
+      ref={setNodeRef}
+      style={style}
+      title={isDuplicate ? '该系统ID与其它关联人重复' : undefined}
+      className={`flex gap-2 items-start sm:items-center mb-2 p-2 rounded w-full transition-colors ${
+        isDuplicate ? 'bg-amber-100/80 ring-1 ring-amber-400' : 'bg-purple-50/50'
+      }`}
+    >
       {/* 拖拽把手 */}
       <div {...attributes} {...listeners} className="cursor-grab pr-1 pt-2 sm:pt-6 text-gray-400 hover:text-gray-600 active:cursor-grabbing">
         <HolderOutlined />
       </div>
-      {children}
+      {/* 内嵌表单项转换为响应式网格：系统ID/姓名/关系收窄，备注加宽 */}
+      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[0.6fr_0.8fr_0.8fr_1.8fr] gap-2 w-full">
+        <Form.Item name={[field.name, 'id']} label="系统ID" className="mb-0">
+          <Input placeholder="" disabled className={`text-center font-mono text-xs border-dashed ${isDuplicate ? 'bg-amber-200/80 text-amber-700' : 'bg-gray-100/80 text-gray-400'}`} />
+        </Form.Item>
+        <Form.Item name={[field.name, 'name']} label="姓名" rules={[{ required: true, message: '必填' }]} className="mb-0">
+          <AutoComplete
+            options={autoCompleteOptions}
+            onSelect={handleSelect}
+            onChange={handleChange}
+            placeholder="输入名字或下拉选择"
+            // 注意：过滤时要拿纯净的 realName 进行比对，避免带有 #ID 后缀干扰用户的正常输入检索
+            filterOption={(inputValue, option) =>
+              option.realName.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+            }
+          />
+        </Form.Item>
+        <Form.Item name={[field.name, 'relation']} label="关系" rules={[{ required: true, message: '必填' }]} className="mb-0"><Input placeholder="如：父亲" /></Form.Item>
+        <Form.Item name={[field.name, 'remark']} label="备注" className="mb-0"><Input /></Form.Item>
+      </div>
+      <MinusCircleOutlined className="text-red-500 pt-2 sm:pt-6 text-lg cursor-pointer self-center sm:self-auto" onClick={() => remove(field.name)} />
     </div>
   );
 }
-
-const commonStyle = {
-  cursor: 'move',
-  transition: 'unset',
-};
 
 // 提取出的联动编辑面板，实现 Cascader 和 Input 并存且联动
 function TagEditorContent({ initialValue, tagTree, onConfirm, onCancel }) {
@@ -214,14 +282,27 @@ function EditableTagGroup({ value = [], onChange, tagTree }) {
   );
 }
 
-export default function ContactForm({ visible, contact, tagTree = [], onCancel, onSave, onDelete }) {
+export default function ContactForm({ visible, contact, tagTree = [], contacts = [], onCancel, onSave, onDelete }) {
   const [form] = Form.useForm();
-  
+
   const faceUuid = Form.useWatch('face_uuid', form);
   const genderWatch = Form.useWatch('gender', form);
+  const relatedValues = Form.useWatch('related', form);
   const [uuidModalVisible, setUuidModalVisible] = React.useState(false);
   const [tempUuid, setTempUuid] = React.useState('');
   const [avatarUrl, setAvatarUrl] = React.useState(null);
+
+  // 统计关联人里出现次数大于 1 的系统ID，用于行底色高亮提示重复
+  const duplicateIds = React.useMemo(() => {
+    const counts = new Map();
+    (relatedValues || []).forEach((r) => {
+      const id = r && r.id ? String(r.id) : '';
+      if (id) counts.set(id, (counts.get(id) || 0) + 1);
+    });
+    const dupes = new Set();
+    counts.forEach((count, id) => { if (count > 1) dupes.add(id); });
+    return dupes;
+  }, [relatedValues]);
 
   useEffect(() => {
     if (visible) {
@@ -311,13 +392,6 @@ export default function ContactForm({ visible, contact, tagTree = [], onCancel, 
     }
 
     return buttons;
-  };
-
-  const handleDragEnd = (event, move) => {
-    const { active, over } = event;
-    if (active.id !== over?.id) {
-      move(active.id, over.id);
-    }
   };
 
   const renderTitle = () => {
@@ -463,25 +537,28 @@ export default function ContactForm({ visible, contact, tagTree = [], onCancel, 
           <h4 className="font-bold my-2 text-gray-700 mt-4">关联人</h4>
           <Form.List name="related">
             {(fields, { add, remove, move }) => (
-              <DndContext 
-                collisionDetection={closestCenter} 
-                onDragEnd={(event) => handleDragEnd(event, move)}
+              <DndContext
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => {
+                  const { active, over } = event;
+                  if (over && active.id !== over.id) {
+                    move(fields.findIndex(f => f.key === active.id), fields.findIndex(f => f.key === over.id));
+                  }
+                }}
               >
-                <SortableContext 
-                  items={fields.map((_, index) => index)} 
+                <SortableContext
+                  items={fields.map((field) => field.key)}
                   strategy={verticalListSortingStrategy}
                 >
-                  {fields.map(({ key, name, ...restField }, index) => (
-                    <DragRow key={key} id={index}>
-                      {/* 内嵌表单项转换为响应式网格 */}
-                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 w-full">
-                        <Form.Item {...restField} name={[name, 'id']} label="系统ID" className="mb-0"><Input placeholder="可选录入系统内的ID" /></Form.Item>
-                        <Form.Item {...restField} name={[name, 'name']} label="姓名" rules={[{ required: true, message: '必填' }]} className="mb-0"><Input /></Form.Item>
-                        <Form.Item {...restField} name={[name, 'relation']} label="关系" rules={[{ required: true, message: '必填' }]} className="mb-0"><Input placeholder="如：父亲" /></Form.Item>
-                        <Form.Item {...restField} name={[name, 'remark']} label="备注" className="mb-0"><Input /></Form.Item>
-                      </div>
-                      <MinusCircleOutlined className="text-red-500 pt-2 sm:pt-6 text-lg cursor-pointer self-center sm:self-auto" onClick={() => remove(name)} />
-                    </DragRow>
+                  {fields.map((field) => (
+                    <RelatedRow
+                      key={field.key}
+                      field={field}
+                      remove={remove}
+                      contacts={contacts}
+                      form={form}
+                      duplicateIds={duplicateIds}
+                    />
                   ))}
                   <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />} className="mt-2">新增关联关系</Button>
                 </SortableContext>
