@@ -23,13 +23,20 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   const [contacts, setContacts] = useState([]);
   const [tagTree, setTagTree] = useState([]);
   const [topics, setTopics] = useState([]);
-  const [selectedTopicId, setSelectedTopicId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  // 持久化选中的主题/标签，刷新后恢复
+  const [selectedTopicId, setSelectedTopicId] = useState(() => {
+    const saved = localStorage.getItem('crm_selected_topic_id');
+    return saved ? parseInt(saved, 10) : null;
+  });
+  const [loading, setLoading] = useState(true);
   const [searchTxt, setSearchTxt] = useState('');
-  const [selectedTagPath, setSelectedTagPath] = useState(null);
+  const [selectedTagPath, setSelectedTagPath] = useState(() => {
+    return localStorage.getItem('crm_selected_tag_path') || null;
+  });
   const [sequenceModalVisible, setSequenceModalVisible] = useState(false);
   const [tagManageVisible, setTagManageVisible] = useState(false);
   const sidebarRef = useRef(null);
+  const gridRef = useRef(null);
   
   // 侧边栏折叠与响应式抽屉状态
   const [siderCollapsed, setSiderCollapsed] = useState(false);
@@ -53,11 +60,21 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   }, []);
 
   // 分页状态管理
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(() => {
+  // 卡片/头像视图按「行」分页，列表视图按「记录数」分页，两者独立持久化
+  const [currentPage, setCurrentPage] = useState(() => {
+    const saved = localStorage.getItem('crm_current_page');
+    return saved ? parseInt(saved, 10) : 1;
+  });
+  const [cardPageSize, setCardPageSize] = useState(() => {
+    const saved = localStorage.getItem('crm_card_page_size');
+    return saved ? parseInt(saved, 10) : 3; // 默认 3 行
+  });
+  const [listPageSize, setListPageSize] = useState(() => {
     const saved = localStorage.getItem('crm_page_size');
     return saved ? parseInt(saved, 10) : 20;
   });
+  // 网格视图每行列数（由 ResizeObserver 实时测量），0 表示尚未测量
+  const [columnsPerRow, setColumnsPerRow] = useState(0);
 
   // 头像显示模式
   const [showAvatarThumb, setShowAvatarThumb] = useState(() => {
@@ -86,9 +103,54 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
     return saved ? JSON.parse(saved) : [];
   });
 
+  // 记录上一轮筛选条件，仅在条件实际变化时才重置页码（兼容 StrictMode 双调用）
+  const prevFilters = useRef({ searchTxt, selectedTagPath, selectedTopicId, searchFields, crmFeatureMode, viewMode });
+
+  // 切换筛选条件时重置页码，仅在条件实际变化时执行（兼容 StrictMode 双调用）
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTxt, selectedTagPath, selectedTopicId, searchFields, crmFeatureMode]);
+    const prev = prevFilters.current;
+    const changed =
+      prev.searchTxt !== searchTxt ||
+      prev.selectedTagPath !== selectedTagPath ||
+      prev.selectedTopicId !== selectedTopicId ||
+      prev.searchFields !== searchFields ||
+      prev.crmFeatureMode !== crmFeatureMode ||
+      prev.viewMode !== viewMode;
+    prevFilters.current = { searchTxt, selectedTagPath, selectedTopicId, searchFields, crmFeatureMode, viewMode };
+    if (changed) {
+      setCurrentPage(1);
+    }
+  }, [searchTxt, selectedTagPath, selectedTopicId, searchFields, crmFeatureMode, viewMode]);
+
+  // 持久化选中的标签路径、主题ID、页码
+  useEffect(() => {
+    localStorage.setItem('crm_selected_tag_path', selectedTagPath || '');
+  }, [selectedTagPath]);
+
+  useEffect(() => {
+    localStorage.setItem('crm_selected_topic_id', selectedTopicId ? String(selectedTopicId) : '');
+  }, [selectedTopicId]);
+
+  useEffect(() => {
+    localStorage.setItem('crm_current_page', String(currentPage));
+  }, [currentPage]);
+
+  // 实时测量网格视图的每行列数，用于按行分页
+  // 依赖 loading：数据重载时 grid div 会被卸载再重建，需在重建后重新绑定 observer
+  useEffect(() => {
+    if (crmFeatureMode === 'stats' || viewMode === 'list' || loading) return;
+    const el = gridRef.current;
+    if (!el) return;
+    const updateColumns = () => {
+      const template = window.getComputedStyle(el).gridTemplateColumns;
+      const count = template.split(' ').filter(s => s.trim()).length;
+      if (count > 0) setColumnsPerRow(count);
+    };
+    updateColumns();
+    const observer = new ResizeObserver(updateColumns);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [crmFeatureMode, viewMode, loading]);
   
   const [detailContact, setDetailContact] = useState(null);
 
@@ -126,10 +188,9 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
 
   useEffect(() => {
     if (crmFeatureMode !== 'topics') return;
-    if (topics.length === 0) {
-      setSelectedTopicId(null);
-      return;
-    }
+    // topics 尚未加载时不重置，避免清空持久化的 selectedTopicId
+    if (topics.length === 0) return;
+    // 数据加载后，若持久化的主题ID不在列表中，才回退到第一个
     if (!topics.some(topic => topic.id === selectedTopicId)) {
       setSelectedTopicId(topics[0].id);
     }
@@ -240,10 +301,35 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
     ? filterContacts(activeContacts, searchTxt, searchFields, null)
     : filterContacts(activeContacts, searchTxt, searchFields, selectedTagPath);
 
-  const startIndex = (currentPage - 1) * pageSize;
-  const pagedContacts = filteredContacts.slice(startIndex, startIndex + pageSize);
-  const isLastPage = currentPage >= Math.ceil(filteredContacts.length / pageSize);
+  // 根据视图模式计算有效分页参数
+  // 卡片/头像视图：pageSize 代表行数，实际每页记录 = 行数 × 每行列数
+  // 列表视图：pageSize 代表记录数，维持原逻辑
+  const isGridView = viewMode === 'card' || viewMode === 'mini';
+  // 网格视图在列数测量完成前不计算分页，避免初始 columnsPerRow=0 导致闪烁
+  const gridReady = !isGridView || columnsPerRow > 0;
+  const effectiveColumns = isGridView ? Math.max(1, columnsPerRow) : 1;
+  const activePageSize = isGridView ? cardPageSize : listPageSize;
+  const recordsPerPage = isGridView ? cardPageSize * effectiveColumns : listPageSize;
+  const effectiveTotal = isGridView
+    ? Math.ceil(filteredContacts.length / effectiveColumns)
+    : filteredContacts.length;
+
+  // 列数变化时可能超出页码范围，钳制到有效区间
+  const maxPage = Math.max(1, Math.ceil(effectiveTotal / activePageSize));
+  const safeCurrentPage = Math.min(currentPage, maxPage);
+
+  const startIndex = (safeCurrentPage - 1) * recordsPerPage;
+  const pagedContacts = filteredContacts.slice(startIndex, startIndex + recordsPerPage);
+  const isLastPage = safeCurrentPage >= maxPage;
   const processedTagTree = enrichTreeWithCounts(tagTree, contacts);
+
+  // 持久化的页码可能超出总页数（如数据被删除后），自动跳到最后一页
+  // 网格视图需等列数测量完成后再钳制，避免用错误的 maxPage 误判
+  useEffect(() => {
+    if (!loading && gridReady && currentPage > maxPage) {
+      setCurrentPage(maxPage);
+    }
+  }, [currentPage, maxPage, loading, gridReady]);
 
   // 统一分发控制栏侧边面板折叠/展开行为
   const handleToggleSider = () => {
@@ -256,8 +342,13 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
 
   const handlePageChange = (page, size) => {
     setCurrentPage(page);
-    setPageSize(size);
-    localStorage.setItem('crm_page_size', String(size));
+    if (isGridView) {
+      setCardPageSize(size);
+      localStorage.setItem('crm_card_page_size', String(size));
+    } else {
+      setListPageSize(size);
+      localStorage.setItem('crm_page_size', String(size));
+    }
   };
 
   const renderSidebarInner = (hideHeader = false) => (
@@ -406,7 +497,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
             ) : filteredContacts.length > 0 ? (
               <>
                 {viewMode === 'card' && (
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-6">
+                  <div ref={gridRef} className="grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-6">
                     {pagedContacts.map(item => (
                       <ContactCard
                         key={item.id}
@@ -419,7 +510,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                   </div>
                 )}
                 {viewMode === 'mini' && (
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-4">
+                  <div ref={gridRef} className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-4">
                     {pagedContacts.map(item => (
                       <ContactMiniCard
                         key={item.id}
@@ -448,7 +539,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                   ) : (
                     <span
                       className="text-blue-400/80 cursor-pointer hover:text-blue-500 transition-colors"
-                      onClick={() => setCurrentPage(prev => prev + 1)}
+                      onClick={() => setCurrentPage(safeCurrentPage + 1)}
                     >
                       — 点击查看下一页 —
                     </span>
@@ -464,11 +555,18 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
             crmFeatureMode={crmFeatureMode}
             selectedTopic={selectedTopic}
             selectedTagPath={selectedTagPath}
-            currentPage={currentPage}
-            pageSize={pageSize}
+            currentPage={safeCurrentPage}
+            pageSize={activePageSize}
+            total={effectiveTotal}
             filteredContactsCount={filteredContacts.length}
             activeContactsCount={topicContacts.length}
             totalContactsCount={contacts.length}
+            pageSizeOptions={isGridView
+              ? ['1', '2', '3', '4', '5', '6', '8', '10']
+              : Array.from({ length: 20 }, (_, i) => String((i + 1) * 5))
+            }
+            sizeChangerLabel={isGridView ? '行' : '条'}
+            paginationReady={gridReady}
             onPageChange={handlePageChange}
             siderCollapsed={isSmallScreen ? drawerSidebarVisible : siderCollapsed}
             onToggleSider={handleToggleSider}

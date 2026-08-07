@@ -8,9 +8,13 @@ export default function CrmBottomBar({
   selectedTagPath,
   currentPage,
   pageSize,
+  total,
   filteredContactsCount,
   activeContactsCount,
   totalContactsCount,
+  pageSizeOptions,
+  sizeChangerLabel,
+  paginationReady = true,
   onPageChange,
   siderCollapsed,
   onToggleSider,
@@ -78,7 +82,7 @@ export default function CrmBottomBar({
       {/* 右侧：分页器 + 计数值 */}
       {/* 核心修改 1：通过 flex-row-reverse 让移动端分页器居右、人数居左。去掉了 border-t 和 pt-2 分割线线 */}
       <div className="flex flex-row-reverse items-center justify-between md:flex-row md:justify-end gap-3 md:gap-4 w-full md:w-auto md:shrink-0">
-        {filteredContactsCount > 0 && (
+        {filteredContactsCount > 0 && paginationReady && (
           // 优化：增加 md:shrink-0 确保未折行时分页器不被压扁变形导致遮挡
           <div className="md:flex-initial md:shrink-0 min-w-0">
             <Pagination
@@ -86,10 +90,12 @@ export default function CrmBottomBar({
               simple
               current={currentPage}
               pageSize={pageSize}
-              total={filteredContactsCount}
+              total={total ?? filteredContactsCount}
               onChange={onPageChange}
               showSizeChanger
-              pageSizeOptions={Array.from({ length: 20 }, (_, i) => String((i + 1) * 5))}
+              pageSizeOptions={pageSizeOptions || Array.from({ length: 20 }, (_, i) => String((i + 1) * 5))}
+              // 网格视图按行分页，覆盖 AntD 默认的「条/页」为「行/页」
+              locale={sizeChangerLabel ? { items_per_page: `${sizeChangerLabel}/页` } : undefined}
               // 核心修改 2：利用 Tailwind 穿透覆盖 AntD 的原生隐藏样式，强行在窄屏下展示 sizeChanger
               className="max-w-full [&_.ant-pagination-options]:!inline-flex"
             />

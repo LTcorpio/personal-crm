@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Button, Drawer, Empty, Modal, Popover, Tag, Tree } from 'antd';
 import { BarChartOutlined, FilterOutlined, TagsOutlined, TeamOutlined } from '@ant-design/icons';
 
@@ -50,7 +50,15 @@ function getIntensityClass(count, maxCount) {
 export default function CrmStatsView({ contacts, tagTree, onContactClick }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [selectedTags, setSelectedTags] = useState([]); // 存储选中的标签 key 数组
+  const [selectedTags, setSelectedTags] = useState(() => {
+    const saved = localStorage.getItem('crm_stats_selected_tags');
+    return saved ? JSON.parse(saved) : [];
+  }); // 存储选中的标签 key 数组
+
+  // 持久化选中的标签
+  useEffect(() => {
+    localStorage.setItem('crm_stats_selected_tags', JSON.stringify(selectedTags));
+  }, [selectedTags]);
   const [modalVisible, setModalVisible] = useState(false);
 
   // ====== 计算未筛选前的总生日人数 ======
