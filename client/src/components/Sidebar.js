@@ -127,15 +127,21 @@ export function SidebarTitle({ mode }) {
 }
 
 // --- 统一导出的功能操作组件 ---
+// 只读模式下，编辑类按钮（管理标签/管理主题）直接隐藏，仅保留筛选类按钮
 export function SidebarExtra({ mode, selectedTagPath, setSelectedTagPath, onManageTags, onManageTopics, editMode = true }) {
   if (mode === 'topics') {
+    // 只读模式下隐藏「管理主题」按钮
+    if (!editMode) return null;
     return (
-      <Button type="text" size="small" icon={<SettingOutlined />} onClick={onManageTopics} disabled={!editMode} title={editMode ? '管理主题' : '只读模式下不可管理'}>管理主题</Button>
+      <Button type="text" size="small" icon={<SettingOutlined />} onClick={onManageTopics} title="管理主题">管理主题</Button>
     );
   }
   return (
     <div className="flex items-center gap-1 shrink-0">
-      <Button icon={<SettingOutlined />} type="text" size="small" onClick={onManageTags} title={editMode ? '管理标签' : '只读模式下不可管理'} disabled={!editMode}>管理标签</Button>
+      {/* 只读模式下隐藏「管理标签」按钮 */}
+      {editMode && (
+        <Button icon={<SettingOutlined />} type="text" size="small" onClick={onManageTags} title="管理标签">管理标签</Button>
+      )}
       <Tooltip title={selectedTagPath === '__NO_TAGS__' ? '取消无标签筛选' : '筛选无标签人员'}>
         <Button
           type={selectedTagPath === '__NO_TAGS__' ? 'primary' : 'default'}

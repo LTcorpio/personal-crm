@@ -72,3 +72,31 @@ export const topicApi = {
   update: (id, data) => api.put(`/topics/${id}`, data),
   delete: (id) => api.delete(`/topics/${id}`),
 };
+
+// 名单管理 API
+export const rosterApi = {
+  // 解析上传的 Excel 文件（返回预览数据，不落库）
+  parse: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/rosters/parse', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  // 确认导入：保存到数据库
+  save: (data) => api.post('/rosters', data),
+  // 获取所有名单列表
+  getAll: () => api.get('/rosters'),
+  // 获取单份名单完整数据
+  getById: (id) => api.get(`/rosters/${id}`),
+  // 删除一份名单
+  delete: (id) => api.delete(`/rosters/${id}`),
+  // 重命名名单
+  rename: (id, name) => api.put(`/rosters/${id}/name`, { name }),
+  // 批量调整名单显示顺序
+  updateOrder: (rosterIds) => api.put('/rosters/order', { rosterIds }),
+  // 搜索 / 筛选（跨名单聚合或指定名单）
+  search: (params) => api.get('/rosters/search', { params }),
+  // 获取指定名单中某列的不重复值（用于筛选下拉选项）
+  getColumnValues: (id, column) => api.get(`/rosters/${id}/column-values`, { params: { column } }),
+};

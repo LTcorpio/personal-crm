@@ -1,20 +1,11 @@
 const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const fs = require('fs');
+const { CRM_DB_PATH } = require('./dbDir');
 
-const dbPath = process.env.DB_PATH;
-
-const dbDir = path.dirname(dbPath);
-if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-    console.log(`已自动创建数据库目录: ${dbDir}`);
-}
-
-const db = new sqlite3.Database(dbPath, (err) => {
+const db = new sqlite3.Database(CRM_DB_PATH, (err) => {
     if (err) {
         console.error('数据库连接失败:', err.message);
     } else {
-        console.log(`数据库成功连接，路径: ${dbPath}`);
+        console.log(`数据库成功连接，路径: ${CRM_DB_PATH}`);
     }
 });
 

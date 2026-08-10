@@ -1,28 +1,66 @@
 import { useState, useEffect } from 'react';
-import { Button, Radio, Select, Drawer, Segmented, Divider, Form, Modal, Input, message, Dropdown, Avatar, Tooltip } from 'antd';
+import { Button, Drawer, Segmented, Divider, Form, Modal, Input, message, Dropdown, Avatar, Menu, Tooltip } from 'antd';
 import {
   PlusOutlined,
   AppstoreOutlined,
   BarsOutlined,
   HarmonyOSOutlined,
-  TeamOutlined,
-  CalculatorOutlined,
   TagsOutlined,
   BarChartOutlined,
   ApartmentOutlined,
   QuestionCircleOutlined,
   MenuOutlined,
-  UserSwitchOutlined,
   LogoutOutlined,
   LockOutlined,
   UserOutlined,
   ToolOutlined,
   EditOutlined,
-  EyeOutlined
+  EyeOutlined,
+  TableOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { authApi } from '../api/crmApi';
+
+// 品牌 LOGO：渐变圆角方块 + 人脉网络节点，寓意「个人人脉管理」
+function BrandLogo({ size = 40 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 40 40"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="shrink-0 drop-shadow-sm"
+      aria-label="个人 CRM 系统 Logo"
+    >
+      <defs>
+        <linearGradient id="crmLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#3b82f6" />
+          <stop offset="55%" stopColor="#6366f1" />
+          <stop offset="100%" stopColor="#8b5cf6" />
+        </linearGradient>
+      </defs>
+      <rect width="40" height="40" rx="11" fill="url(#crmLogoGradient)" />
+      {/* 人脉连接线 */}
+      <path
+        d="M20 16 L11.5 24 M20 16 L28.5 24 M13 26.5 L27 26.5"
+        stroke="white"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        opacity="0.55"
+      />
+      {/* 中心人物节点 */}
+      <circle cx="20" cy="13" r="4.2" fill="white" />
+      <path d="M14 22c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5v1.5H14V22z" fill="white" opacity="0.95" />
+      {/* 两侧人物节点 */}
+      <circle cx="11" cy="25" r="3" fill="white" opacity="0.85" />
+      <path d="M8 31.5c0-2.4 1.8-4 3.5-4s3.5 1.6 3.5 4v1H8v-1z" fill="white" opacity="0.8" />
+      <circle cx="29" cy="25" r="3" fill="white" opacity="0.85" />
+      <path d="M26 31.5c0-2.4 1.8-4 3.5-4s3.5 1.6 3.5 4v1H26v-1z" fill="white" opacity="0.8" />
+    </svg>
+  );
+}
 
 export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFeatureMode, editMode = true, onToggleEditMode, onAddContact }) {
   const navigate = useNavigate();
@@ -40,6 +78,10 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
 
   // 判断当前是否在 CRM 页面
   const isCrmPage = location.pathname === '/' || location.pathname === '/crm';
+  // 判断当前是否在名单管理页面
+  const isRosterPage = location.pathname === '/rosters';
+  // 当前路由对应的菜单 key
+  const currentRouteKey = isCrmPage ? 'crm' : (isRosterPage ? 'rosters' : 'tools');
 
   // 当打开抽屉时，去 /public 目录异步获取使用说明
   useEffect(() => {
@@ -121,67 +163,92 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
     }
   };
 
+  // 桌面端页面导航菜单项
+  const pageNavItems = [
+    {
+      key: 'crm',
+      icon: <TagsOutlined />,
+      label: '人脉管理',
+    },
+    {
+      key: 'rosters',
+      icon: <TableOutlined />,
+      label: '名单管理',
+    },
+    {
+      key: 'tools',
+      icon: <ToolOutlined />,
+      label: '实用工具',
+    },
+  ];
+
+  // CRM 功能模式 Segmented 选项
+  const crmModeOptions = [
+    { value: 'tags', label: (<span className="flex items-center gap-1.5"><TagsOutlined />按标签</span>) },
+    { value: 'topics', label: (<span className="flex items-center gap-1.5"><ApartmentOutlined />按主题</span>) },
+    { value: 'stats', label: (<span className="flex items-center gap-1.5"><BarChartOutlined />统计</span>) },
+  ];
+
+  // 视图布局 Segmented 选项
+  const viewModeOptions = [
+    { value: 'card', icon: <AppstoreOutlined /> },
+    { value: 'mini', icon: <HarmonyOSOutlined /> },
+    { value: 'list', icon: <BarsOutlined /> },
+  ];
+
   return (
     <header className="bg-gray-50 shadow-sm border-b border-gray-200 sticky top-0 z-40 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between relative select-none">
-      {/* 1. 左侧区域：Logo + 桌面端页面级路由切换 */}
-      <div className="flex items-center gap-4 md:gap-6">
-        <div className="flex items-center gap-2 md:gap-3 cursor-pointer" onClick={() => navigate('/')}>
-          <div className="bg-blue-600 text-white w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center font-bold text-lg md:text-xl shadow-md shrink-0">
-            <TeamOutlined />
-          </div>
+      {/* 1. 左侧区域：Logo + 桌面端页面导航 + CRM 功能模式 */}
+      <div className="flex items-center gap-4 md:gap-6 min-w-0">
+        <div className="flex items-center gap-2 md:gap-2.5 cursor-pointer shrink-0" onClick={() => navigate('/')}>
+          <BrandLogo size={38} />
           <h1 className="text-lg md:text-xl font-bold tracking-tight m-0 sm:block">
             个人 CRM 系统
           </h1>
         </div>
 
         {/* 桌面端页面导航：中屏及以上显示 */}
-        <div className="hidden lg:block">
-          <Radio.Group 
-            value={isCrmPage ? 'crm' : 'tools'} 
-            onChange={(e) => navigate(e.target.value === 'crm' ? '/' : '/tools')}
-            optionType="button"
-            buttonStyle="solid"
-          >
-            <Radio.Button value="crm"><UserSwitchOutlined />
-              <span className='hidden xl:inline ml-1.5'>人脉管理</span>
-            </Radio.Button>
-            <Radio.Button value="tools"><ToolOutlined />
-              <span className='hidden xl:inline ml-1.5'>实用工具</span>
-            </Radio.Button>
-          </Radio.Group>
-        </div>
-      </div>
-
-      {/* 2. 中间区域：桌面端核心功能模式选择（绝对定位居中，中屏及以上显示） */}
-      {isCrmPage && (
-        <div className="hidden md:block absolute left-1/2 -translate-x-1/2">
-          <span className="text-gray-500 mr-2 text-sm">模式选择：</span>
-          <Select
-            value={crmFeatureMode}
-            onChange={(value) => setCrmFeatureMode(value)}
-            style={{ width: 180 }}
-            options={[
-              { value: 'tags', label: <><TagsOutlined /> 按标签查看</> },
-              { value: 'topics', label: <><ApartmentOutlined /> 按主题查看</> },
-              { value: 'stats', label: <><BarChartOutlined /> 信息统计</> },
-            ]}
+        <div className="hidden lg:flex items-center shrink-0">
+          <Menu
+            mode="horizontal"
+            selectedKeys={[currentRouteKey]}
+            onClick={({ key }) => {
+              if (key === 'crm') navigate('/');
+              else if (key === 'rosters') navigate('/rosters');
+              else if (key === 'tools') navigate('/tools');
+            }}
+            items={pageNavItems}
+            className="!border-b-0 !bg-transparent !font-medium"
+            style={{ minWidth: 320, lineHeight: '40px' }}
+            disabledOverflow
           />
         </div>
-      )}
 
-      {/* 3. 右侧区域：动作操作区 */}
-      <div className="flex items-center gap-2 md:gap-3">
+        {/* CRM 功能模式切换：紧跟在页面导航之后，仅在 CRM 页面且中屏以上显示 */}
+        {isCrmPage && (
+          <div className="hidden lg:flex items-center shrink-0">
+            <Segmented
+              size="middle"
+              value={crmFeatureMode}
+              onChange={(v) => setCrmFeatureMode(v)}
+              options={crmModeOptions}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* 2. 右侧区域：动作操作区 */}
+      <div className="flex items-center gap-2 md:gap-3 shrink-0">
         {isCrmPage && crmFeatureMode !== 'stats' && (
           <>
-            {/* 移动端保留为 Icon 按钮，大屏显示完整文字 */}
-            {crmFeatureMode === 'tags' && (
+            {/* 新增联系人：仅编辑模式下显示，只读模式直接隐藏 */}
+            {editMode && crmFeatureMode === 'tags' && (
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
                 className="rounded-lg font-medium shadow-sm flex items-center justify-center"
                 onClick={onAddContact}
-                disabled={!editMode}
-                title={editMode ? '新增联系人' : '只读模式下不可新增'}
+                title="新增联系人"
               >
                 <span className="hidden xl:inline">新增联系人</span>
               </Button>
@@ -190,40 +257,31 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
             {/* 桌面端视图切换：中屏及以上显示 */}
             <div className="hidden lg:block">
               <Segmented
-                options={[
-                  { value: 'card', icon: <AppstoreOutlined /> },
-                  { value: 'mini', icon: <HarmonyOSOutlined /> },
-                  { value: 'list', icon: <BarsOutlined /> },
-                ]}
+                options={viewModeOptions}
                 value={viewMode}
                 onChange={e => setViewMode(e)}
               />
             </div>
 
-            {/* 编辑模式开关：仅 CRM 页面展示，放在右侧操作区 */}
+            {/* 编辑/只读模式切换：圆形按钮，以颜色区分当前状态 */}
+            {/* 编辑模式 = 蓝色（活跃），只读模式 = 绿色（安全浏览） */}
             {onToggleEditMode && (
-              <Tooltip title={editMode ? '当前为编辑模式，点击切换为只读' : '当前为只读模式，点击开启编辑'}>
+              <Tooltip title={editMode ? '编辑模式 · 点击切换为只读' : '只读模式 · 点击开启编辑'}>
                 <Button
-                  type={editMode ? 'primary' : 'default'}
+                  shape="circle"
                   icon={editMode ? <EditOutlined /> : <EyeOutlined />}
                   onClick={() => onToggleEditMode(!editMode)}
-                  className="flex items-center justify-center"
-                >
-                  <span className="hidden xl:inline">{editMode ? '编辑模式' : '只读模式'}</span>
-                </Button>
+                  type={editMode ? 'primary' : 'default'}
+                  style={!editMode ? {
+                    backgroundColor: '#52c41a',
+                    borderColor: '#52c41a',
+                    color: '#fff',
+                  } : undefined}
+                />
               </Tooltip>
             )}
           </>
         )}
-        
-        {/* 桌面端说明文档按钮 */}
-        {/* <Button 
-          icon={<QuestionCircleOutlined />} 
-          onClick={handleOpenReadme}
-          // className="hidden md:inline-flex"
-        >
-          <span className="hidden xl:inline">使用说明</span>
-        </Button> */}
 
         <Dropdown menu={{ items: userMenuItems, onClick: handleMenuClick }} trigger={['click']} placement="bottomRight">
           <div className="hidden sm:flex items-center gap-2 cursor-pointer py-1 text-gray-600 hover:text-blue-600 transition-colors select-none">
@@ -254,19 +312,21 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
           {/* 模块1：系统页面路由切换 */}
           <div>
             <div className="text-xs font-semibold text-gray-400 mb-2 tracking-wider">当前系统</div>
-            <Radio.Group 
-              value={isCrmPage ? 'crm' : 'tools'} 
-              onChange={(e) => {
-                navigate(e.target.value === 'crm' ? '/' : '/tools');
+            <Segmented
+              block
+              value={currentRouteKey}
+              onChange={(v) => {
+                if (v === 'crm') navigate('/');
+                else if (v === 'rosters') navigate('/rosters');
+                else if (v === 'tools') navigate('/tools');
                 setMobileMenuVisible(false);
               }}
-              optionType="button"
-              buttonStyle="solid"
-              className="w-full flex"
-            >
-              <Radio.Button value="crm" className="flex-1 text-center"><TeamOutlined /> 人脉管理</Radio.Button>
-              <Radio.Button value="tools" className="flex-1 text-center"><ToolOutlined /> 实用工具</Radio.Button>
-            </Radio.Group>
+              options={[
+                { value: 'crm', label: (<span className="flex items-center gap-1"><TagsOutlined />人脉</span>) },
+                { value: 'rosters', label: (<span className="flex items-center gap-1"><TableOutlined />名单</span>) },
+                { value: 'tools', label: (<span className="flex items-center gap-1"><ToolOutlined />工具</span>) },
+              ]}
+            />
           </div>
 
           {isCrmPage && <Divider className="my-1 border-gray-100" />}
@@ -275,18 +335,14 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
           {isCrmPage && (
             <div>
               <div className="text-xs font-semibold text-gray-400 mb-2 tracking-wider">功能模式</div>
-              <Select
+              <Segmented
+                block
                 value={crmFeatureMode}
                 onChange={(value) => {
                   setCrmFeatureMode(value);
                   setMobileMenuVisible(false);
                 }}
-                className="w-full"
-                options={[
-                  { value: 'tags', label: <><TagsOutlined /> 按标签查看</> },
-                  { value: 'topics', label: <><ApartmentOutlined /> 按主题查看</> },
-                  { value: 'stats', label: <><BarChartOutlined /> 信息统计</> },
-                ]}
+                options={crmModeOptions}
               />
             </div>
           )}
@@ -332,20 +388,20 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
           <Divider className="my-1 border-gray-100" />
 
           {/* 模块4：文档与系统支持 */}
-          <Button 
+          <Button
             block
             type="dashed"
-            icon={<QuestionCircleOutlined />} 
+            icon={<QuestionCircleOutlined />}
             onClick={() => setDrawerVisible(true)}
             className="mt-2 text-gray-600"
           >
             系统使用说明
           </Button>
 
-          <Button 
+          <Button
             block
             type="dashed"
-            icon={<LockOutlined />} 
+            icon={<LockOutlined />}
             onClick={() => {
               setMobileMenuVisible(false); // 先关闭移动端控制面板
               setIsPasswordModalOpen(true); // 打开修改密码弹窗
@@ -355,7 +411,7 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
             修改密码
           </Button>
 
-          <Button 
+          <Button
             block
             danger
             type="primary"

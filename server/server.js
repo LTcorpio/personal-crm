@@ -3,16 +3,18 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const contactRoutes = require('./routes/contactRoutes');
+const rosterRoutes = require('./routes/rosterRoutes');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 15197;
 
 // 中间件配置
 app.use(cors());
-app.use(express.json()); // 解析 JSON 请求体
+app.use(express.json({ limit: '50mb' })); // 解析 JSON 请求体（名单导入数据量较大，放宽限制）
 
 // 1. 路由挂载 (必须放在静态资源托管之前，优先匹配 API 请求)
 app.use('/api', contactRoutes);
+app.use('/api/rosters', rosterRoutes);
 
 // 2. [生产] 托管前端打包后的静态资源文件（Docker 构建时会将前端 build 产物复制到这里的 public 目录）
 app.use(express.static(path.join(__dirname, 'public')));

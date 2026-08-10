@@ -6,6 +6,7 @@ import Header from './components/Header';
 import LoginPage from './pages/LoginPage';
 import CrmPage from './pages/CrmPage';
 import ToolsPage from './pages/ToolsPage';
+import RosterManagement from './pages/RosterManagement';
 
 export default function App() {
   // 检查本地是否存在 Token
@@ -77,8 +78,8 @@ export default function App() {
           <div className="flex-1 min-h-0 w-full relative">
             <Routes>
               {/* 默认根路径指向 CRM 页面 */}
-              <Route 
-                path="/" 
+              <Route
+                path="/"
                 element={
                   <CrmPage
                     viewMode={viewMode}
@@ -91,16 +92,21 @@ export default function App() {
                     editMode={editMode}
                     setEditMode={setEditMode}
                   />
-                } 
+                }
               />
-              <Route 
-                path="/crm" 
-                element={<Navigate to="/" replace />} 
+              <Route
+                path="/crm"
+                element={<Navigate to="/" replace />}
+              />
+              {/* 名单管理页面 */}
+              <Route
+                path="/rosters"
+                element={<RosterManagement />}
               />
               {/* 亲戚计算器页面 */}
-              <Route 
-                path="/tools" 
-                element={<ToolsPage />} 
+              <Route
+                path="/tools"
+                element={<ToolsPage />}
               />
             </Routes>
           </div>
