@@ -93,6 +93,8 @@ export const rosterApi = {
   delete: (id) => api.delete(`/rosters/${id}`),
   // 重命名名单
   rename: (id, name) => api.put(`/rosters/${id}/name`, { name }),
+  // 更新名单的可筛选字段
+  updateFilterableColumns: (id, filterableColumns) => api.put(`/rosters/${id}/filterable-columns`, { filterableColumns }),
   // 批量调整名单显示顺序
   updateOrder: (rosterIds) => api.put('/rosters/order', { rosterIds }),
   // 搜索 / 筛选（跨名单聚合或指定名单）

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Table, Button, Popconfirm, Space, Tag, Avatar } from 'antd';
+import { Table, Button, Space, Tag, Tooltip } from 'antd';
+import { RightOutlined } from '@ant-design/icons';
 import ContactAvatar from './ContactAvatar';
 
 export default function ContactListTable({
@@ -51,7 +52,35 @@ export default function ContactListTable({
             return text === 1 ? <Tag color="blue">男</Tag> : <Tag color="pink">女</Tag>;
           }
           if (col.key === 'tag') {
-            return text ? text.map((item, index) => <Tag key={index}>{item}</Tag>) : null;
+            if (!text || text.length === 0) return null;
+            // 提取叶子标签名，用于窄屏模式下展示
+            const getLeafName = (path) => path.split('/').pop();
+            return (
+              <div className="flex flex-col gap-1 items-center">
+                {text.map((item, index) => (
+                  <div key={index} className="contents">
+                    {/* 宽屏：完整路径，无 Tooltip */}
+                    <span className="hidden md:inline-flex text-xs bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100 items-center whitespace-nowrap">
+                      {item.split('/').map((tag, idx, arr) => {
+                        const isLast = idx === arr.length - 1;
+                        return (
+                          <span key={idx} className="flex items-center">
+                            <span className={isLast ? "font-bold text-blue-700" : "text-blue-700/80"}>{tag}</span>
+                            {!isLast && <RightOutlined className="mx-1 text-blue-700/30 font-normal text-[10px]" />}
+                          </span>
+                        );
+                      })}
+                    </span>
+                    {/* 窄屏：仅叶子标签，带 Tooltip */}
+                    <Tooltip title={item}>
+                      <span className="inline-flex md:hidden text-xs bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100 items-center whitespace-nowrap font-bold text-blue-700">
+                        {getLeafName(item)}
+                      </span>
+                    </Tooltip>
+                  </div>
+                ))}
+              </div>
+            );
           }
           return text || '-';
         },

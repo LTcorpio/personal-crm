@@ -57,8 +57,15 @@ export default function RosterManagement() {
   const [sheetNames, setSheetNames] = useState({});
   // 每个待导入工作表所选字段 { [sheetIndex]: string[] }（默认全部勾选）
   const [sheetSelectedColumns, setSheetSelectedColumns] = useState({});
+  // 每个待导入工作表的可筛选字段 { [sheetIndex]: string[] }（默认等于已选字段）
+  const [sheetFilterableColumns, setSheetFilterableColumns] = useState({});
   // 当前是否正在保存某个工作表
   const [saving, setSaving] = useState(false);
+
+  // 管理弹窗中编辑可筛选字段的状态
+  const [filterableEditRoster, setFilterableEditRoster] = useState(null);
+  const [filterableEditValue, setFilterableEditValue] = useState([]);
+  const [filterableSaving, setFilterableSaving] = useState(false);
 
   // ====== 数据加载 ======
   const fetchRosters = useCallback(async () => {
@@ -146,6 +153,10 @@ export default function RosterManagement() {
         const initCols = {};
         sheets.forEach((s, i) => { initCols[i] = [...s.columns]; });
         setSheetSelectedColumns(initCols);
+        // 默认所有已选字段都可筛选
+        const initFilterable = {};
+        sheets.forEach((s, i) => { initFilterable[i] = [...s.columns]; });
+        setSheetFilterableColumns(initFilterable);
         setImportStep('select');
         setConfirmCursor(0);
         setImportModalVisible(true);
@@ -181,6 +192,9 @@ export default function RosterManagement() {
       selectedCols.forEach(col => { newRow[col] = row[col] !== undefined ? row[col] : ''; });
       return newRow;
     });
+    // 可筛选字段：仅保留已选导入字段中的，默认全部可筛选
+    const filterableCols = (sheetFilterableColumns[sheetIndex] || selectedCols)
+      .filter(c => selectedCols.includes(c));
 
     setSaving(true);
     try {
@@ -188,6 +202,7 @@ export default function RosterManagement() {
         name,
         columns: selectedCols,
         rows: filteredRows,
+        filterableColumns: filterableCols,
       });
       if (res.data?.success) {
         message.success(`名单「${name}」导入成功，共 ${res.data.data.rowCount} 条记录`);
@@ -203,6 +218,7 @@ export default function RosterManagement() {
           setSelectedSheetIndices([]);
           setSheetNames({});
           setSheetSelectedColumns({});
+          setSheetFilterableColumns({});
         }
       }
     } catch (err) {
@@ -210,7 +226,7 @@ export default function RosterManagement() {
     } finally {
       setSaving(false);
     }
-  }, [selectedSheetIndices, confirmCursor, parsedSheets, sheetNames, sheetSelectedColumns, fetchRosters]);
+  }, [selectedSheetIndices, confirmCursor, parsedSheets, sheetNames, sheetSelectedColumns, sheetFilterableColumns, fetchRosters]);
 
   // ====== 跳过当前工作表（不导入） ======
   const handleSkipSheet = useCallback(() => {
@@ -222,6 +238,7 @@ export default function RosterManagement() {
       setParsedSheets([]);
       setSelectedSheetIndices([]);
       setSheetNames({});
+      setSheetFilterableColumns({});
       message.info('已跳过该工作表，导入流程结束');
     }
   }, [confirmCursor, selectedSheetIndices.length]);
@@ -233,6 +250,7 @@ export default function RosterManagement() {
     setSelectedSheetIndices([]);
     setSheetNames({});
     setSheetSelectedColumns({});
+    setSheetFilterableColumns({});
     setImportStep('select');
     setConfirmCursor(0);
   }, []);
@@ -284,8 +302,14 @@ export default function RosterManagement() {
 
   // ====== 管理名单弹窗 ======
   const handleOpenManageModal = useCallback(() => {
-    // 打开时以当前 rosters 顺序初始化本地编辑列表
-    setEditRosterList(rosters.map(r => ({ id: r.id, name: r.name, row_count: r.row_count })));
+    // 打开时以当前 rosters 顺序初始化本地编辑列表（保留 columns/filterable_columns 供编辑使用）
+    setEditRosterList(rosters.map(r => ({
+      id: r.id,
+      name: r.name,
+      row_count: r.row_count,
+      columns: r.columns,
+      filterable_columns: r.filterable_columns,
+    })));
     setRenamingId(null);
     setRenamingValue('');
     setManageModalVisible(true);
@@ -357,16 +381,51 @@ export default function RosterManagement() {
     return rosters.find(r => r.id === selectedRosterId) || null;
   }, [selectedRosterId, rosters]);
 
-  const availableColumns = useMemo(() => {
-    return selectedRoster ? selectedRoster.columns : [];
+  // 可筛选字段：优先使用名单保存的 filterable_columns，为空则回退为全部字段
+  const filterableColumns = useMemo(() => {
+    if (!selectedRoster) return [];
+    const fc = selectedRoster.filterable_columns;
+    if (Array.isArray(fc) && fc.length > 0) return fc;
+    return selectedRoster.columns || [];
   }, [selectedRoster]);
 
-  // 选中名单变化时，自动预加载所有列的值（用于内联筛选行）
-  // 注意：必须放在 availableColumns 声明之后，否则会触发 TDZ 报错
+  // 选中名单变化时，自动预加载可筛选列的值（用于内联筛选行）
+  // 注意：必须放在 filterableColumns 声明之后，否则会触发 TDZ 报错
   useEffect(() => {
     if (!selectedRosterId) return;
-    availableColumns.forEach(col => loadColumnValues(selectedRosterId, col));
-  }, [selectedRosterId, availableColumns, loadColumnValues]); // eslint-disable-line react-hooks/exhaustive-deps
+    filterableColumns.forEach(col => loadColumnValues(selectedRosterId, col));
+  }, [selectedRosterId, filterableColumns, loadColumnValues]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ====== 管理弹窗：编辑可筛选字段 ======
+  const handleOpenFilterableEdit = useCallback((roster) => {
+    const allCols = Array.isArray(roster.columns) ? roster.columns : [];
+    const fc = Array.isArray(roster.filterable_columns) && roster.filterable_columns.length > 0
+      ? roster.filterable_columns
+      : allCols;
+    setFilterableEditRoster({ ...roster, columns: allCols });
+    setFilterableEditValue([...fc]);
+  }, []);
+
+  const handleSaveFilterableColumns = useCallback(async () => {
+    if (!filterableEditRoster) return;
+    setFilterableSaving(true);
+    try {
+      const res = await rosterApi.updateFilterableColumns(filterableEditRoster.id, filterableEditValue);
+      if (res.data?.success) {
+        // 同步更新主列表与编辑列表
+        const updated = res.data.data.filterable_columns;
+        setRosters(prev => prev.map(r => r.id === filterableEditRoster.id ? { ...r, filterable_columns: updated } : r));
+        setEditRosterList(prev => prev.map(r => r.id === filterableEditRoster.id ? { ...r, filterable_columns: updated } : r));
+        message.success('可筛选字段已更新');
+        setFilterableEditRoster(null);
+        setFilterableEditValue([]);
+      }
+    } catch (err) {
+      message.error('更新可筛选字段失败');
+    } finally {
+      setFilterableSaving(false);
+    }
+  }, [filterableEditRoster, filterableEditValue]);
 
   // 活跃筛选项数量
   const activeFilterCount = useMemo(() => {
@@ -421,6 +480,14 @@ export default function RosterManagement() {
     }));
   }, [currentSelectedColumns]);
 
+  // 当前工作表用户已勾选的可筛选字段（仅限已选导入字段内）
+  const currentFilterableColumns = useMemo(() => {
+    if (!currentConfirmSheet) return [];
+    const sheetIdx = selectedSheetIndices[confirmCursor];
+    const fc = sheetFilterableColumns[sheetIdx] || currentSelectedColumns;
+    return fc.filter(c => currentSelectedColumns.includes(c));
+  }, [currentConfirmSheet, sheetFilterableColumns, selectedSheetIndices, confirmCursor, currentSelectedColumns]);
+
   return (
     <div className="h-full flex flex-col bg-gray-50 relative">
       {/* ====== 顶部工具栏 ====== */}
@@ -473,30 +540,37 @@ export default function RosterManagement() {
       </div>
 
       {/* ====== 字段筛选行（内联展示，非抽屉） ====== */}
-      {selectedRosterId && availableColumns.length > 0 && (
+      {selectedRosterId && filterableColumns.length > 0 && (
         <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 shrink-0">
           <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
             <FilterOutlined />
             <span>字段筛选</span>
             {activeFilterCount > 0 && <Tag color="blue" className="m-0 ml-0.5">{activeFilterCount}</Tag>}
           </div>
-          {availableColumns.map(col => (
-            <div key={col} className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-500">{col}：</span>
-              <Select
-                mode="tags"
-                allowClear
-                size="small"
-                style={{ minWidth: 140, maxWidth: 220 }}
-                placeholder="输入或选择"
-                value={filters[col] || []}
-                onChange={(vals) => setFilters(prev => ({ ...prev, [col]: vals }))}
-                options={(columnValueCache[`${selectedRosterId}_${col}`] || []).map(v => ({ value: v, label: v }))}
-                tokenSeparators={[',']}
-                maxTagCount="responsive"
-              />
-            </div>
-          ))}
+          {filterableColumns.map(col => {
+            const selectedVals = filters[col] || [];
+            return (
+              <div key={col} className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-500 shrink-0">{col}：</span>
+                <Select
+                  mode="multiple"
+                  allowClear
+                  size="small"
+                  style={{ minWidth: 140, maxWidth: 280 }}
+                  placeholder="输入或选择"
+                  value={selectedVals}
+                  onChange={(vals) => setFilters(prev => {
+                    const next = { ...prev };
+                    if (vals.length > 0) next[col] = vals;
+                    else delete next[col];
+                    return next;
+                  })}
+                  options={(columnValueCache[`${selectedRosterId}_${col}`] || []).map(v => ({ value: v, label: v }))}
+                  maxTagTextLength={10}
+                />
+              </div>
+            );
+          })}
           {activeFilterCount > 0 && (
             <Button size="small" type="link" onClick={() => setFilters({})}>清空筛选</Button>
           )}
@@ -610,6 +684,14 @@ export default function RosterManagement() {
                         size="small"
                         icon={<EditOutlined />}
                         onClick={() => { setRenamingId(roster.id); setRenamingValue(roster.name); }}
+                      />
+                    </Tooltip>
+                    <Tooltip title="可筛选字段">
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<FilterOutlined />}
+                        onClick={() => handleOpenFilterableEdit(roster)}
                       />
                     </Tooltip>
                     <Tooltip title="查看详情">
@@ -745,7 +827,7 @@ export default function RosterManagement() {
               <div className="flex-1">
                 <div className="font-medium text-gray-800">工作表「{currentConfirmSheet.sheetName}」</div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  {currentConfirmSheet.rowCount} 条数据 · {currentConfirmSheet.columns.length} 个字段 · 已选 {currentSelectedColumns.length} 个字段
+                  {currentConfirmSheet.rowCount} 条数据 · {currentConfirmSheet.columns.length} 个字段 · 已选 {currentSelectedColumns.length} 个字段 · 可筛选 {currentFilterableColumns.length} 个字段
                 </div>
               </div>
             </div>
@@ -775,6 +857,7 @@ export default function RosterManagement() {
                     onClick={() => {
                       const sheetIdx = selectedSheetIndices[confirmCursor];
                       setSheetSelectedColumns(prev => ({ ...prev, [sheetIdx]: [...currentConfirmSheet.columns] }));
+                      setSheetFilterableColumns(prev => ({ ...prev, [sheetIdx]: [...currentConfirmSheet.columns] }));
                     }}
                   >
                     全选
@@ -785,6 +868,7 @@ export default function RosterManagement() {
                     onClick={() => {
                       const sheetIdx = selectedSheetIndices[confirmCursor];
                       setSheetSelectedColumns(prev => ({ ...prev, [sheetIdx]: [] }));
+                      setSheetFilterableColumns(prev => ({ ...prev, [sheetIdx]: [] }));
                     }}
                   >
                     清空
@@ -800,11 +884,83 @@ export default function RosterManagement() {
                       key={col}
                       checked={checked}
                       onChange={(e) => {
+                        const sheetIdx = selectedSheetIndices[confirmCursor];
                         setSheetSelectedColumns(prev => {
                           const cur = prev[sheetIdx] || [];
+                          let next;
                           if (e.target.checked) {
                             // 保持原始列顺序
-                            const next = currentConfirmSheet.columns.filter(c => cur.includes(c) || c === col);
+                            next = currentConfirmSheet.columns.filter(c => cur.includes(c) || c === col);
+                          } else {
+                            next = cur.filter(c => c !== col);
+                          }
+                          // 同步清理可筛选字段：取消导入的字段不再可筛选
+                          setSheetFilterableColumns(prevF => {
+                            const curF = prevF[sheetIdx] || [];
+                            const nextF = next.filter(c => curF.includes(c));
+                            // 默认新增的导入字段也加入可筛选
+                            const newAdded = next.filter(c => !cur.includes(c));
+                            return { ...prevF, [sheetIdx]: [...nextF, ...newAdded] };
+                          });
+                          return { ...prev, [sheetIdx]: next };
+                        });
+                      }}
+                    >
+                      <span className="text-xs">{col}</span>
+                    </Checkbox>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 可筛选字段选择（仅从已选导入字段中选取） */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium text-gray-700">
+                  可筛选字段
+                  <span className="text-xs text-gray-400 font-normal ml-2">勾选后该字段将出现在顶部筛选行中</span>
+                </label>
+                <Space size={0}>
+                  <Button
+                    type="link"
+                    size="small"
+                    disabled={currentSelectedColumns.length === 0}
+                    onClick={() => {
+                      const sheetIdx = selectedSheetIndices[confirmCursor];
+                      setSheetFilterableColumns(prev => ({ ...prev, [sheetIdx]: [...currentSelectedColumns] }));
+                    }}
+                  >
+                    全选
+                  </Button>
+                  <Button
+                    type="link"
+                    size="small"
+                    disabled={currentSelectedColumns.length === 0}
+                    onClick={() => {
+                      const sheetIdx = selectedSheetIndices[confirmCursor];
+                      setSheetFilterableColumns(prev => ({ ...prev, [sheetIdx]: [] }));
+                    }}
+                  >
+                    清空
+                  </Button>
+                </Space>
+              </div>
+              <div className="flex flex-wrap gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg max-h-32 overflow-y-auto">
+                {currentSelectedColumns.length === 0 ? (
+                  <span className="text-xs text-gray-400">请先选择导入字段</span>
+                ) : currentSelectedColumns.map(col => {
+                  const sheetIdx = selectedSheetIndices[confirmCursor];
+                  const checked = (sheetFilterableColumns[sheetIdx] || []).includes(col);
+                  return (
+                    <Checkbox
+                      key={col}
+                      checked={checked}
+                      onChange={(e) => {
+                        setSheetFilterableColumns(prev => {
+                          const cur = prev[sheetIdx] || [];
+                          if (e.target.checked) {
+                            // 保持导入字段顺序
+                            const next = currentSelectedColumns.filter(c => cur.includes(c) || c === col);
                             return { ...prev, [sheetIdx]: next };
                           } else {
                             return { ...prev, [sheetIdx]: cur.filter(c => c !== col) };
@@ -880,6 +1036,71 @@ export default function RosterManagement() {
               size="small"
               className="border border-gray-100 rounded-lg"
             />
+          </div>
+        )}
+      </Modal>
+
+      {/* ====== 可筛选字段编辑弹窗 ====== */}
+      <Modal
+        title={filterableEditRoster ? `可筛选字段 - ${filterableEditRoster.name}` : '可筛选字段'}
+        open={!!filterableEditRoster}
+        onCancel={() => { setFilterableEditRoster(null); setFilterableEditValue([]); }}
+        width={560}
+        footer={[
+          <Button key="cancel" onClick={() => { setFilterableEditRoster(null); setFilterableEditValue([]); }}>取消</Button>,
+          <Button key="save" type="primary" icon={<CheckOutlined />} loading={filterableSaving} onClick={handleSaveFilterableColumns}>
+            保存
+          </Button>,
+        ]}
+        destroyOnClose
+      >
+        {filterableEditRoster && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400">勾选允许在筛选行中使用的字段</span>
+              <Space size={0}>
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => setFilterableEditValue([...filterableEditRoster.columns])}
+                >
+                  全选
+                </Button>
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => setFilterableEditValue([])}
+                >
+                  清空
+                </Button>
+              </Space>
+            </div>
+            <div className="flex flex-wrap gap-2 p-3 bg-gray-50 border border-gray-100 rounded-lg max-h-64 overflow-y-auto">
+              {filterableEditRoster.columns.map(col => {
+                const checked = filterableEditValue.includes(col);
+                return (
+                  <Checkbox
+                    key={col}
+                    checked={checked}
+                    onChange={(e) => {
+                      setFilterableEditValue(prev => {
+                        if (e.target.checked) {
+                          // 保持原始列顺序
+                          return filterableEditRoster.columns.filter(c => prev.includes(c) || c === col);
+                        } else {
+                          return prev.filter(c => c !== col);
+                        }
+                      });
+                    }}
+                  >
+                    <span className="text-xs">{col}</span>
+                  </Checkbox>
+                );
+              })}
+            </div>
+            <div className="text-xs text-gray-400">
+              已选 {filterableEditValue.length} / {filterableEditRoster.columns.length} 个字段
+            </div>
           </div>
         )}
       </Modal>

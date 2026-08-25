@@ -67,6 +67,9 @@ router.get('/:id', rosterController.getRosterById);
 // 重命名名单
 router.put('/:id/name', rosterController.renameRoster);
 
+// 更新名单的可筛选字段
+router.put('/:id/filterable-columns', rosterController.updateFilterableColumns);
+
 // 删除一份名单
 router.delete('/:id', rosterController.deleteRoster);
 

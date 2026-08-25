@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Tag, Tooltip, Collapse } from 'antd';
-import { PhoneOutlined, MailOutlined, EnvironmentOutlined, IdcardOutlined, WechatOutlined, QqOutlined, TikTokOutlined, QuestionCircleOutlined, CommentOutlined } from '@ant-design/icons';
+import { PhoneOutlined, MailOutlined, EnvironmentOutlined, IdcardOutlined, WechatOutlined, QqOutlined, TikTokOutlined, QuestionCircleOutlined, CommentOutlined, RightOutlined } from '@ant-design/icons';
 import Markdown from 'react-markdown';
 import ContactAvatar from './ContactAvatar';
 
@@ -107,11 +107,25 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
           )}
           <div className="mt-2 flex flex-wrap gap-1">
             {contact.tag?.map((t, idx) => (
-              <Tooltip title={t} key={idx}>
-                <Tag color="blue" className="border-none bg-blue-50 text-blue-600 rounded-lg">
-                  {getLeafTagName(t)}
-                </Tag>
-              </Tooltip>
+              noBorder ? (
+                <span key={idx} className="text-xs bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100 inline-flex items-center whitespace-nowrap">
+                  {t.split('/').map((tag, index, arr) => {
+                    const isLast = index === arr.length - 1;
+                    return (
+                      <span key={index} className="flex items-center">
+                        <span className={isLast ? "font-bold text-blue-700" : "text-blue-700/80"}>{tag}</span>
+                        {!isLast && <RightOutlined className="mx-1 text-blue-700/30 font-normal text-[10px]" />}
+                      </span>
+                    );
+                  })}
+                </span>
+              ) : (
+                <Tooltip title={t} key={idx}>
+                  <Tag color="blue" className="border-none bg-blue-50 text-blue-600 rounded-lg align-middle max-w-[150px] truncate">
+                    {getLeafTagName(t)}
+                  </Tag>
+                </Tooltip>
+              )
             ))}
           </div>
         </div>
