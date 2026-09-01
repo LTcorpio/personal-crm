@@ -213,11 +213,26 @@ func (s *Server) handleSaveContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !isExisting {
+		// 全新录入：追加到列表末尾，避免落到 DEFAULT 0 后挤到最前面
+		var maxOrder sql.NullInt64
+		if err := tx.QueryRow(`SELECT MAX(sort_order) AS max_order FROM contacts`).Scan(&maxOrder); err != nil {
+			rollback()
+			logServerError("保存联系人失败:", err)
+			writeErr()
+			return
+		}
+		nextOrder := int64(0)
+		if maxOrder.Valid {
+			nextOrder = maxOrder.Int64 + 1
+		}
+
 		// 全新录入：直接插入主表
+		insertParams := append([]any{finalContactID}, mainParams...)
+		insertParams = append(insertParams, nextOrder)
 		if _, err := tx.Exec(`
-            INSERT INTO contacts (id, face_uuid, name, gender, ethnicity, native_place, title, birthday_solar, birthday_lunar, deathday, id_card, location, address, extra, remark)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, append([]any{finalContactID}, mainParams...)...); err != nil {
+            INSERT INTO contacts (id, face_uuid, name, gender, ethnicity, native_place, title, birthday_solar, birthday_lunar, deathday, id_card, location, address, extra, remark, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, insertParams...); err != nil {
 			rollback()
 			logServerError("保存联系人失败:", err)
 			writeErr()
@@ -701,6 +716,7 @@ func (s *Server) loadAllTags() (map[int64]tagRow, error) {
 }
 
 // ensureTagPath 确保多层级标签存在，并返回叶子节点 ID（须在事务内调用）。
+// 新建的标签会追加到同级末尾，而不是落到 sort_order 的 DEFAULT 0 挤在最前面。
 func ensureTagPath(tx *sql.Tx, pathStr string) (int64, error) {
 	var parts []string
 	for _, p := range strings.Split(pathStr, "/") {
@@ -717,7 +733,19 @@ func ensureTagPath(tx *sql.Tx, pathStr string) (int64, error) {
 		).Scan(&id)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			res, err := tx.Exec(`INSERT INTO tags (name, parent_id) VALUES (?, ?)`, part, parentID)
+			// 新标签追加到同级末尾：取同级最大 sort_order + 1
+			var maxOrder sql.NullInt64
+			if err := tx.QueryRow(
+				`SELECT MAX(sort_order) AS max_order FROM tags WHERE parent_id = ? OR (? IS NULL AND parent_id IS NULL)`,
+				parentID, parentID,
+			).Scan(&maxOrder); err != nil {
+				return 0, err
+			}
+			nextOrder := int64(0)
+			if maxOrder.Valid {
+				nextOrder = maxOrder.Int64 + 1
+			}
+			res, err := tx.Exec(`INSERT INTO tags (name, parent_id, sort_order) VALUES (?, ?, ?)`, part, parentID, nextOrder)
 			if err != nil {
 				return 0, err
 			}
