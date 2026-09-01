@@ -189,9 +189,14 @@ func (s *Server) handleDeleteTag(w http.ResponseWriter, r *http.Request) {
 	web.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "message": "标签及相关子层级已安全移除"})
 }
 
-// loadTagRefs 读取全部标签（不含排序，供级联删除使用）。
+// loadTagRefs 读取全部标签，按 sort_order 升序（同值时按 id 升序）返回，
+// 供标签树构建与级联删除使用。
+//
+// 注意：此处必须带 ORDER BY，否则 SQLite 默认按 rowid 返回，
+// handleUpdateTagsOrder 保存的 sort_order 将不会体现在标签树上（排序失效）。
+// 与 Node 版 contactController.js 的 `SELECT * FROM tags ORDER BY sort_order ASC, id ASC` 保持一致。
 func (s *Server) loadTagRefs() ([]tagRef, error) {
-	rows, err := s.crm.Query(`SELECT id, name, parent_id FROM tags`)
+	rows, err := s.crm.Query(`SELECT id, name, parent_id FROM tags ORDER BY sort_order ASC, id ASC`)
 	if err != nil {
 		return nil, err
 	}
