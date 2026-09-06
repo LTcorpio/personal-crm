@@ -476,7 +476,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
               editMode={editMode}
             />
           }
-          className='select-none'
+          className=''
         >
           {/* 3. 传入 true 隐藏 Drawer 内部主体的原有头部，避免重复渲染 */}
           {renderSidebarInner(true)}
@@ -533,7 +533,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                     editMode={editMode}
                   />
                 )}
-                <div className="text-center text-gray-400 text-xs mt-8 pb-4 select-none tracking-wide">
+                <div className="text-center text-gray-400 text-xs mt-8 pb-4 tracking-wide">
                   {isLastPage ? (
                     <span>— 这是最后一页了 —</span>
                   ) : (
@@ -605,7 +605,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         onCancel={() => setDetailContact(null)}
         footer={null}
         width={720}
-        className='select-none'
+        className=''
       >
         {detailContact && (
           <div className="pt-4">
@@ -657,7 +657,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
       </FloatButton.Group>
 
       <Drawer title="头像展示全局配置" placement="bottom" height={200} onClose={() => setAvatarDrawerVisible(false)} open={avatarDrawerVisible} destroyOnClose>
-        <div className="max-w-md mx-auto select-none">
+        <div className="max-w-md mx-auto">
           <Flex vertical gap="middle">
             <Flex align="center" justify="space-between" className="py-1">
               <span className="font-medium text-gray-800">头像缩略图</span>

@@ -74,7 +74,7 @@ export default function SearchFilter({
 
   // 气泡弹窗内部的渲染布局
   const popoverContent = (
-    <div className="w-[380px] p-1 select-none">
+    <div className="w-[380px] p-1">
       <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
         <Space size="middle">
           <span className="font-bold text-gray-700">搜索范围</span>

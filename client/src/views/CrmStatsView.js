@@ -279,7 +279,7 @@ export default function CrmStatsView({ contacts, tagTree, onContactClick }) {
         onClose={() => setDrawerVisible(false)}
         open={drawerVisible}
         size={540}
-        className='select-none'
+        className=''
       >
         {tagTree.length > 0 ? (
           <Tree
@@ -306,7 +306,7 @@ export default function CrmStatsView({ contacts, tagTree, onContactClick }) {
         footer={null}
         width={550}
         centered
-        className='select-none'
+        className=''
       >
         <div className="mt-4">
           {selectedMonthDays.some(item => item.people.length > 0) ? (

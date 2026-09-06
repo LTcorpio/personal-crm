@@ -82,7 +82,7 @@ export default function ContactSequenceModal({ open, onClose, contacts, onSaveSu
               onDragEnd={handleDragEnd}
               onDragOver={(e) => e.preventDefault()}
               className={`
-                group relative flex items-center gap-2 px-1.5 py-0.5 rounded-md select-none transition-all duration-200 cursor-grab active:cursor-grabbing
+                group relative flex items-center gap-2 px-1.5 py-0.5 rounded-mdtransition-all duration-200 cursor-grab active:cursor-grabbing
                 ${isDragging 
                   ? 'opacity-40 border-dashed border-blue-400 bg-blue-50 scale-95' 
                   : 'bg-gray-50 hover:bg-blue-50/40 border border-gray-200 hover:border-blue-400'

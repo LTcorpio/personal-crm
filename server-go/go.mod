@@ -4,7 +4,6 @@ go 1.25.0
 
 require (
 	github.com/extrame/xls v0.0.1
-	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/xuri/excelize/v2 v2.11.0
 	modernc.org/sqlite v1.57.0
 )

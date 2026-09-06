@@ -164,9 +164,9 @@ export default function TagManagementModal({ visible, onClose, tagTree }) {
       ]}
       width={600}
       destroyOnHidden
-      className='select-none'
+      className=''
     >
-      <div className="flex flex-col gap-4 pt-2 select-none">
+      <div className="flex flex-col gap-4 pt-2">
         {/* 上方面包屑导航栏与回溯控制 */}
         <div className="flex items-center gap-3 bg-gray-50/80 p-3 rounded-xl border border-gray-100">
           <Button

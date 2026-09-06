@@ -1,35 +1,34 @@
 // Package api 组装全部 HTTP 路由，行为对齐 Node 版
 // server.js（静态托管/兜底/CORS/请求体大小限制）与
 // routes/contactRoutes.js、routes/rosterRoutes.js 的路由定义。
+//
+// 注意：系统已改由反向代理层（Authelia SSO）统一完成身份认证，
+// 后端不再做任何密码/JWT 校验，完全信任代理转发过来的请求。
 package api
 
 import (
 	"database/sql"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-
-	"crm-server/internal/auth"
 )
 
 // jsonBodyLimit 与 Express express.json({ limit: '50mb' }) 一致。
 const jsonBodyLimit = 50 << 20
 
-// Server 聚合数据库连接与认证服务。
+// Server 聚合数据库连接。
 type Server struct {
 	crm       *sql.DB
 	roster    *sql.DB
-	auth      *auth.Service
 	staticDir string
 }
 
 // NewServer 创建 API 服务。
-func NewServer(crm, roster *sql.DB, authSvc *auth.Service, staticDir string) *Server {
-	return &Server{crm: crm, roster: roster, auth: authSvc, staticDir: staticDir}
+func NewServer(crm, roster *sql.DB, staticDir string) *Server {
+	return &Server{crm: crm, roster: roster, staticDir: staticDir}
 }
 
 // Handler 构建完整的 HTTP 处理链：CORS -> 请求体限制 -> 路由。
@@ -37,46 +36,37 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
 	// ===== /api 主路由（对应 contactRoutes.js）=====
-	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
-	// ---- 以下接口均需 JWT 鉴权（对应 router.use(authMiddleware)）----
-	mux.Handle("POST /api/auth/logout", s.authed(s.handleLogout))
-	mux.Handle("POST /api/settings/update", s.authed(s.handleSettingsUpdate))
-	mux.Handle("POST /api/contacts", s.authed(s.handleSaveContact))
-	mux.Handle("GET /api/contacts", s.authed(s.handleGetContacts))
-	mux.Handle("PUT /api/contacts/order", s.authed(s.handleUpdateContactsOrder))
-	mux.Handle("DELETE /api/contacts/{id}", s.authed(s.handleDeleteContact))
-	mux.Handle("GET /api/tags/tree", s.authed(s.handleGetTagTree))
-	mux.Handle("PUT /api/tags/order", s.authed(s.handleUpdateTagsOrder))
-	mux.Handle("PUT /api/tags/{id}", s.authed(s.handleUpdateTag))
-	mux.Handle("DELETE /api/tags/{id}", s.authed(s.handleDeleteTag))
-	mux.Handle("GET /api/topics", s.authed(s.handleGetTopics))
-	mux.Handle("POST /api/topics", s.authed(s.handleCreateTopic))
-	mux.Handle("PUT /api/topics/order", s.authed(s.handleUpdateTopicsOrder))
-	mux.Handle("PUT /api/topics/{id}", s.authed(s.handleUpdateTopic))
-	mux.Handle("DELETE /api/topics/{id}", s.authed(s.handleDeleteTopic))
-	mux.Handle("GET /api/proxy-face/{uuid}", s.authed(s.handleProxyFace))
+	mux.HandleFunc("POST /api/contacts", s.handleSaveContact)
+	mux.HandleFunc("GET /api/contacts", s.handleGetContacts)
+	mux.HandleFunc("PUT /api/contacts/order", s.handleUpdateContactsOrder)
+	mux.HandleFunc("DELETE /api/contacts/{id}", s.handleDeleteContact)
+	mux.HandleFunc("GET /api/tags/tree", s.handleGetTagTree)
+	mux.HandleFunc("PUT /api/tags/order", s.handleUpdateTagsOrder)
+	mux.HandleFunc("PUT /api/tags/{id}", s.handleUpdateTag)
+	mux.HandleFunc("DELETE /api/tags/{id}", s.handleDeleteTag)
+	mux.HandleFunc("GET /api/topics", s.handleGetTopics)
+	mux.HandleFunc("POST /api/topics", s.handleCreateTopic)
+	mux.HandleFunc("PUT /api/topics/order", s.handleUpdateTopicsOrder)
+	mux.HandleFunc("PUT /api/topics/{id}", s.handleUpdateTopic)
+	mux.HandleFunc("DELETE /api/topics/{id}", s.handleDeleteTopic)
+	mux.HandleFunc("GET /api/proxy-face/{uuid}", s.handleProxyFace)
 
-	// ===== /api/rosters 名单路由（全部需鉴权，对应 rosterRoutes.js）=====
-	mux.Handle("POST /api/rosters/parse", s.authed(s.handleParseRoster))
-	mux.Handle("POST /api/rosters", s.authed(s.handleSaveRoster))
-	mux.Handle("GET /api/rosters", s.authed(s.handleGetRosters))
-	mux.Handle("GET /api/rosters/search", s.authed(s.handleSearchRosters))
-	mux.Handle("PUT /api/rosters/order", s.authed(s.handleUpdateRostersOrder))
-	mux.Handle("GET /api/rosters/{id}/column-values", s.authed(s.handleGetColumnValues))
-	mux.Handle("GET /api/rosters/{id}", s.authed(s.handleGetRosterByID))
-	mux.Handle("PUT /api/rosters/{id}/name", s.authed(s.handleRenameRoster))
-	mux.Handle("PUT /api/rosters/{id}/filterable-columns", s.authed(s.handleUpdateFilterableColumns))
-	mux.Handle("DELETE /api/rosters/{id}", s.authed(s.handleDeleteRoster))
+	// ===== /api/rosters 名单路由（对应 rosterRoutes.js）=====
+	mux.HandleFunc("POST /api/rosters/parse", s.handleParseRoster)
+	mux.HandleFunc("POST /api/rosters", s.handleSaveRoster)
+	mux.HandleFunc("GET /api/rosters", s.handleGetRosters)
+	mux.HandleFunc("GET /api/rosters/search", s.handleSearchRosters)
+	mux.HandleFunc("PUT /api/rosters/order", s.handleUpdateRostersOrder)
+	mux.HandleFunc("GET /api/rosters/{id}/column-values", s.handleGetColumnValues)
+	mux.HandleFunc("GET /api/rosters/{id}", s.handleGetRosterByID)
+	mux.HandleFunc("PUT /api/rosters/{id}/name", s.handleRenameRoster)
+	mux.HandleFunc("PUT /api/rosters/{id}/filterable-columns", s.handleUpdateFilterableColumns)
+	mux.HandleFunc("DELETE /api/rosters/{id}", s.handleDeleteRoster)
 
 	// ===== 静态资源 + SPA 兜底（对应 express.static + app.get catch-all）=====
 	mux.HandleFunc("/", s.serveStatic)
 
 	return corsMiddleware(bodyLimit(mux))
-}
-
-// authed 为 handler 附加 JWT 鉴权中间件。
-func (s *Server) authed(h http.HandlerFunc) http.Handler {
-	return s.auth.Middleware(h)
 }
 
 // bodyLimit 限制请求体大小（对齐 express.json 的 50mb 限制）。
@@ -153,20 +143,6 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, indexPath)
-}
-
-// clientIP 获取客户端 IP（优先 x-forwarded-for，用于穿透代理获取真实 IP）。
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return xff
-	}
-	if r.RemoteAddr != "" {
-		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-			return host
-		}
-		return r.RemoteAddr
-	}
-	return "未知IP"
 }
 
 // logServerError 记录服务端错误（对应 console.error）。

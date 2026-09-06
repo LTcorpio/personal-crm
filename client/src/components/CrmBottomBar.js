@@ -20,7 +20,7 @@ export default function CrmBottomBar({
   onToggleSider,
 }) {
   return (
-    <div className="bg-white px-4 py-2.5 sm:px-6 sm:py-3 border-t border-gray-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between text-gray-500 shrink-0 select-none">
+    <div className="bg-white px-4 py-2.5 sm:px-6 sm:py-3 border-t border-gray-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between text-gray-500 shrink-0">
       
       {/* 左侧：折叠控制器 + 当前维度状态 */}
       <div className="flex items-center gap-2 md:gap-3 min-w-0 w-full md:w-auto">

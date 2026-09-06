@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button, Drawer, Segmented, Divider, Form, Modal, Input, message, Dropdown, Avatar, Menu, Tooltip } from 'antd';
+import { Button, Drawer, Segmented, Divider, Menu, Tooltip } from 'antd';
 import {
   PlusOutlined,
   AppstoreOutlined,
@@ -8,11 +8,8 @@ import {
   TagsOutlined,
   BarChartOutlined,
   ApartmentOutlined,
-  QuestionCircleOutlined,
+  FileTextOutlined,
   MenuOutlined,
-  LogoutOutlined,
-  LockOutlined,
-  UserOutlined,
   ToolOutlined,
   EditOutlined,
   EyeOutlined,
@@ -20,7 +17,6 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { authApi } from '../api/crmApi';
 
 // 品牌 LOGO：渐变圆角方块 + 人脉网络节点，寓意「个人人脉管理」
 function BrandLogo({ size = 40 }) {
@@ -72,9 +68,6 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
   // 存储 markdown 文本内容
   const [readmeContent, setReadmeContent] = useState('');
-  // 修改密码
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [passwordForm] = Form.useForm();
 
   // 判断当前是否在 CRM 页面
   const isCrmPage = location.pathname === '/' || location.pathname === '/crm';
@@ -92,76 +85,6 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
         .catch((err) => console.error('加载使用说明失败:', err));
     }
   }, [drawerVisible, readmeContent]);
-
-  // 修改密码
-  // 1. 下拉菜单项定义
-  const userMenuItems = [
-    {
-      key: 'intro',
-      label: '使用说明',
-      icon: <QuestionCircleOutlined />,
-    },
-    {
-      key: 'password',
-      label: '修改密码',
-      icon: <LockOutlined />,
-    },
-    {
-      key: 'logout',
-      label: '退出登录',
-      icon: <LogoutOutlined />,
-      danger: true,
-    },
-  ];
-
-  // 2. 下拉菜单点击监听
-  const handleMenuClick = ({ key }) => {
-    if (key === 'intro') {
-      setDrawerVisible(true);
-    } else if (key === 'password') {
-      setIsPasswordModalOpen(true);
-    } else if (key === 'logout') {
-      // 退出系统加一个防误触弹窗确认
-      Modal.confirm({
-        title: '提示',
-        content: '确定要退出系统吗？',
-        okText: '确定',
-        cancelText: '取消',
-        onOk: () => handleLogout(),
-      });
-    }
-  };
-
-  // 3. 更新密码的 API 请求体变更 (加入 oldPassword)
-  const handleChangePassword = async (values) => {
-    try {
-      const res = await authApi.changePassword(values.oldPassword, values.newPassword);
-      if (res.data && res.data.success) {
-        message.success('密码修改成功，请重新登录！');
-        setIsPasswordModalOpen(false);
-        passwordForm.resetFields();
-        handleLogout(); // 强制退出重新登录
-      }
-    } catch (error) {
-      const msg = error.response?.data?.message || '原密码错误或网络异常';
-      message.error(msg);
-    }
-  };
-
-  // 退出登录
-  const handleLogout = async () => {
-    try {
-      // 优先请求后端，将当前 Token 关进黑名单
-      await authApi.logout();
-    } catch (error) {
-      // 仅做错误打印，不阻断前端的清除逻辑
-      console.error('后端 Token 销毁失败:', error);
-    } finally {
-      // 无论后端是否成功，前端必须清除凭证并刷新
-      localStorage.removeItem('crm_token'); // 清除本地凭证
-      window.location.reload(); // 刷新页面，状态机自动退回登录卡片
-    }
-  };
 
   // 桌面端页面导航菜单项
   const pageNavItems = [
@@ -197,7 +120,7 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
   ];
 
   return (
-    <header className="bg-gray-50 shadow-sm border-b border-gray-200 sticky top-0 z-40 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between relative select-none">
+    <header className="bg-gray-50 shadow-sm border-b border-gray-200 sticky top-0 z-40 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between relative">
       {/* 1. 左侧区域：Logo + 桌面端页面导航 + CRM 功能模式 */}
       <div className="flex items-center gap-4 md:gap-6 min-w-0">
         <div className="flex items-center gap-2 md:gap-2.5 cursor-pointer shrink-0" onClick={() => navigate('/')}>
@@ -283,12 +206,14 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
           </>
         )}
 
-        <Dropdown menu={{ items: userMenuItems, onClick: handleMenuClick }} trigger={['click']} placement="bottomRight">
-          <div className="hidden sm:flex items-center gap-2 cursor-pointer py-1 text-gray-600 hover:text-blue-600 transition-colors select-none">
-            <Avatar style={{ backgroundColor: '#1677ff' }} icon={<UserOutlined />} size="small" />
-            <span className="font-medium text-sm">管理员</span>
-          </div>
-        </Dropdown>
+        {/* 使用说明按钮：圆形图标，与编辑模式按钮风格一致 */}
+        <Tooltip title="使用说明">
+          <Button
+            shape="circle"
+            icon={<FileTextOutlined />}
+            onClick={() => setDrawerVisible(true)}
+          />
+        </Tooltip>
 
         {/* 移动端菜单唤醒按钮：仅在小屏下显示 */}
         <Button
@@ -306,7 +231,6 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
         onClose={() => setMobileMenuVisible(false)}
         open={mobileMenuVisible}
         size={360}
-        className='select-none'
       >
         <div className="flex flex-col gap-5">
           {/* 模块1：系统页面路由切换 */}
@@ -385,43 +309,7 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
             </>
           )}
 
-          <Divider className="my-1 border-gray-100" />
-
-          {/* 模块4：文档与系统支持 */}
-          <Button
-            block
-            type="dashed"
-            icon={<QuestionCircleOutlined />}
-            onClick={() => setDrawerVisible(true)}
-            className="mt-2 text-gray-600"
-          >
-            系统使用说明
-          </Button>
-
-          <Button
-            block
-            type="dashed"
-            icon={<LockOutlined />}
-            onClick={() => {
-              setMobileMenuVisible(false); // 先关闭移动端控制面板
-              setIsPasswordModalOpen(true); // 打开修改密码弹窗
-            }}
-            className="text-gray-600"
-          >
-            修改密码
-          </Button>
-
-          <Button
-            block
-            danger
-            type="primary"
-            icon={<LogoutOutlined />}
-            onClick={handleLogout}
-            className="rounded-lg font-medium shadow-sm bg-red-500 hover:bg-red-600"
-          >
-            退出系统
-          </Button>
-        </div>
+          </div>
       </Drawer>
 
       <Drawer
@@ -435,57 +323,6 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
           <ReactMarkdown>{readmeContent || '正在加载说明文档...'}</ReactMarkdown>
         </div>
       </Drawer>
-
-      <Modal
-        title="修改管理员密码"
-        open={isPasswordModalOpen}
-        onOk={() => passwordForm.submit()}
-        onCancel={() => {
-          setIsPasswordModalOpen(false);
-          passwordForm.resetFields();
-        }}
-        okText="确定修改"
-        cancelText="取消"
-        destroyOnClose
-      >
-        <Form form={passwordForm} onFinish={handleChangePassword} layout="vertical" className="mt-4">
-          <Form.Item
-            name="oldPassword"
-            label="当前旧密码"
-            rules={[{ required: true, message: '请输入当前旧密码进行身份验证' }]}
-          >
-            <Input.Password placeholder="请输入当前旧密码" />
-          </Form.Item>
-          <Form.Item
-            name="newPassword"
-            label="输入新密码"
-            rules={[
-              { required: true, message: '请输入新密码' },
-              { min: 6, message: '为了系统安全，密码长度至少为 6 位' }
-            ]}
-          >
-            <Input.Password placeholder="请输入新密码" />
-          </Form.Item>
-          <Form.Item
-            name="confirmPassword"
-            label="确认新密码"
-            dependencies={['newPassword']}
-            rules={[
-              { required: true, message: '请再次输入密码以确认' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  if (!value || getFieldValue('newPassword') === value) {
-                    return Promise.resolve();
-                  }
-                  return Promise.reject(new Error('两次输入的密码不一致，请重新检查'));
-                },
-              }),
-            ]}
-          >
-            <Input.Password placeholder="请再次输入新密码" />
-          </Form.Item>
-        </Form>
-      </Modal>
 
     </header>
   );

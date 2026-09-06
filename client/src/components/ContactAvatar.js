@@ -30,7 +30,7 @@ export default function ContactAvatar({ faceUuid, name, avatarConfig, sizeClass,
     <div
       // 右键事件阻止冒泡，避免触发父级点击逻辑
       onContextMenu={(e) => e.stopPropagation()}
-      className={`rounded-full flex items-center justify-center overflow-hidden border select-none flex-shrink-0 ${sizeClass} ${
+      className={`rounded-full flex items-center justify-center overflow-hidden borderflex-shrink-0 ${sizeClass} ${
         isTextFallback ? 'bg-blue-50 border-blue-200' : 'bg-gray-100 border-gray-200'
       }`}
     >

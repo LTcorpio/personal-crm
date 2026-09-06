@@ -3,15 +3,11 @@ import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header';
-import LoginPage from './pages/LoginPage';
 import CrmPage from './pages/CrmPage';
 import ToolsPage from './pages/ToolsPage';
 import RosterManagement from './pages/RosterManagement';
 
 export default function App() {
-  // 检查本地是否存在 Token
-  const [token, setToken] = useState(() => localStorage.getItem('crm_token'));
-
   // 模态框及弹窗控制
   const [formVisible, setFormVisible] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
@@ -38,20 +34,7 @@ export default function App() {
     localStorage.setItem('crm_edit_mode', String(mode));
   };
 
-  // ==========================================
-  // 情况 A：未登录，渲染独立密码保护界面
-  // ==========================================
-  if (!token) {
-    return (
-      <ConfigProvider locale={zhCN}>
-        <LoginPage onLoginSuccess={(receivedToken) => setToken(receivedToken)} />
-      </ConfigProvider>
-    );
-  }
-
-  // ==========================================
-  // 情况 B：已登录，正常渲染主系统布局
-  // ==========================================
+  // 身份认证由反向代理层（Authelia SSO）统一完成，前端直接渲染主系统布局
   return (
     <ConfigProvider
       theme={{
@@ -62,7 +45,7 @@ export default function App() {
       locale={zhCN}
     >
       <BrowserRouter>
-        <div className="h-screen bg-slate-50 text-slate-800 select-none flex flex-col">
+        <div className="h-screen bg-slate-50 text-slate-800 flex flex-col">
           {/* 顶部主导航栏 */}
           <Header
             viewMode={viewMode}

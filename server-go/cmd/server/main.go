@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"crm-server/internal/api"
-	"crm-server/internal/auth"
 	"crm-server/internal/config"
 	"crm-server/internal/store"
 )
@@ -35,14 +34,7 @@ func main() {
 		log.Fatalf("名单数据库初始化失败: %v", err)
 	}
 
-	authSvc := auth.NewService(crm)
-	if err := authSvc.Init(); err != nil {
-		store.CloseWithCheckpoint(crm, "主库")
-		store.CloseWithCheckpoint(roster, "名单库")
-		log.Fatalf("认证服务初始化失败: %v", err)
-	}
-
-	server := api.NewServer(crm, roster, authSvc, config.StaticDir)
+	server := api.NewServer(crm, roster, config.StaticDir)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", config.Port)
 	srv := &http.Server{
@@ -53,6 +45,7 @@ func main() {
 	log.Println("个人 CRM 后端服务已启动")
 	log.Printf("本地访问地址: http://localhost:%d", config.Port)
 	log.Printf("局域网访问地址: http://%s", addr)
+	log.Println("SQLite WAL 模式已启用（收到 SIGTERM/SIGINT 停机时将自动 checkpoint 落盘并清理 -wal/-shm）")
 
 	// 监听退出信号（Ctrl+C 与 docker stop）
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

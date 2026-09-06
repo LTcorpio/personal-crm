@@ -106,7 +106,7 @@ function TagEditorContent({ initialValue, tagTree, onConfirm, onCancel }) {
   const cascaderValue = currentValue ? currentValue.split('/') : [];
 
   return (
-    <div className="flex flex-col gap-3 p-1 w-100 select-none">
+    <div className="flex flex-col gap-3 p-1 w-100">
       {tagTree && tagTree.length > 0 && (
         <div className="flex flex-col gap-1">
           <span className="text-gray-400 font-medium text-xs">从分类树选择:</span>
@@ -191,7 +191,7 @@ function DragTag({ id, text, onRemove, onEdit, tagTree }) {
         }
       >
         <span 
-          className="cursor-pointer font-medium text-purple-700 hover:bg-purple-100/60 px-2 py-0.5 rounded transition-all select-none"
+          className="cursor-pointer font-medium text-purple-700 hover:bg-purple-100/60 px-2 py-0.5 rounded transition-all"
           title="点击编辑标签"
         >
           {text}
@@ -400,7 +400,7 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
         <div className="flex items-center gap-2 flex-wrap">
           <span>编辑人员信息</span>
           <Tag color="blue" className="font-mono cursor-pointer" title="点击可复制 ID">
-            <span className="select-none">ID: </span>
+            <span className="">ID: </span>
             <span className="select-all">{contact.id}</span>
           </Tag>
         </div>
@@ -418,7 +418,7 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
         footer={renderFooter()}
         width={1080}
         destroyOnHidden
-        className="select-none"
+        className=""
       >
         <Form form={form} layout="vertical" name="contact_form" initialValues={{ gender: 1 }}>
           

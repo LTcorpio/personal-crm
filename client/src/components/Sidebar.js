@@ -328,7 +328,7 @@ const Sidebar = forwardRef(function Sidebar({
           <Button key="c" onClick={() => setManageModalOpen(false)}>取消</Button>,
           <Button key="s" type="primary" onClick={handleSaveOrder}>保存排序</Button>
         ]}
-        className='select-none'
+        className=''
       >
         <div className="mb-4 flex justify-between items-center">
           <span className="text-xs text-gray-400">💡 拖动左侧手柄可对主题进行上下排序</span>
@@ -351,7 +351,7 @@ const Sidebar = forwardRef(function Sidebar({
         confirmLoading={saving}
         width={720}
         destroyOnHidden
-        className='select-none'
+        className=''
       >
         <Form form={form} layout="vertical" className="pt-4">
           <div className="grid grid-cols-[1fr_200px] gap-4">
