@@ -35,4 +35,8 @@ COPY --from=frontend-builder /app/client/build ./public
 # 暴露端口（与 docker-compose.yml 中 PORT 保持一致）
 EXPOSE 5197
 
+# 内置默认配置，与 compose 的挂载/端口映射一致（compose 将 DockerData/personal-crm 挂到 /app/data）
+ENV PORT=5197
+ENV DB_DIR=/app/data
+
 CMD ["/app/server/crm-server"]
