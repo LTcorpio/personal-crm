@@ -418,6 +418,7 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
         footer={renderFooter()}
         width={1080}
         destroyOnHidden
+        maskClosable={false}
         className=""
       >
         <Form form={form} layout="vertical" name="contact_form" initialValues={{ gender: 1 }}>

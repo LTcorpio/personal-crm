@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Avatar, Dropdown, Image } from 'antd';
 import { UserOutlined, LinkOutlined, EyeOutlined } from '@ant-design/icons';
 import AuthenticatedAvatar, { getAvatarUrl } from './AuthenticatedAvatar';
@@ -8,6 +8,56 @@ export default function ContactAvatar({ faceUuid, name, avatarConfig, sizeClass,
   const [previewSrc, setPreviewSrc] = useState('');
   const showThumb = avatarConfig?.showAvatarThumb !== false && faceUuid;
   const isTextFallback = !showThumb && avatarConfig?.avatarFallbackType && avatarConfig.avatarFallbackType !== 'default';
+
+  // 移动端长按菜单状态：桌面沿用右键 contextMenu，触屏长按手动展开下拉
+  const [menuOpen, setMenuOpen] = useState(false);
+  const longPressTimer = useRef(null);
+  const longPressTriggered = useRef(false);
+  const touchStartPos = useRef(null);
+
+  const clearLongPressTimer = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const startLongPress = (e) => {
+    const touch = e.touches && e.touches[0];
+    if (!touch) return;
+    longPressTriggered.current = false;
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    clearLongPressTimer();
+    longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true;
+      setMenuOpen(true);
+    }, 500);
+  };
+
+  const moveLongPress = (e) => {
+    const touch = e.touches && e.touches[0];
+    if (!touch || !touchStartPos.current) return;
+    const dx = touch.clientX - touchStartPos.current.x;
+    const dy = touch.clientY - touchStartPos.current.y;
+    // 滑动超过 10px 视为滚动/拖拽，取消长按
+    if (dx * dx + dy * dy > 100) clearLongPressTimer();
+  };
+
+  const endLongPress = () => {
+    clearLongPressTimer();
+    touchStartPos.current = null;
+  };
+
+  // 长按触发过菜单后，拦截随后派生的 click，避免误触父级打开编辑弹窗
+  const handleAvatarClick = (e) => {
+    if (longPressTriggered.current) {
+      longPressTriggered.current = false;
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
+  useEffect(() => clearLongPressTimer, []);
 
   const handleMenuClick = ({ key, domEvent }) => {
     // 阻止菜单点击事件冒泡到父级，避免触发父级 onClick 打开详情/编辑弹窗
@@ -32,7 +82,13 @@ export default function ContactAvatar({ faceUuid, name, avatarConfig, sizeClass,
     <div
       // 右键事件阻止冒泡，避免触发父级点击逻辑
       onContextMenu={(e) => e.stopPropagation()}
-      className={`rounded-full flex items-center justify-center overflow-hidden borderflex-shrink-0 ${sizeClass} ${
+      onTouchStart={startLongPress}
+      onTouchMove={moveLongPress}
+      onTouchEnd={endLongPress}
+      onTouchCancel={endLongPress}
+      onClick={handleAvatarClick}
+      style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+      className={`rounded-full select-none flex items-center justify-center overflow-hidden borderflex-shrink-0 ${sizeClass} ${
         isTextFallback ? 'bg-blue-50 border-blue-200' : 'bg-gray-100 border-gray-200'
       }`}
     >
@@ -60,6 +116,8 @@ export default function ContactAvatar({ faceUuid, name, avatarConfig, sizeClass,
       {faceUuid ? (
         <Dropdown
           trigger={['contextMenu']}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
           menu={{
             items: [
               {

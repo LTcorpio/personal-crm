@@ -107,9 +107,9 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
 
   // CRM 功能模式 Segmented 选项
   const crmModeOptions = [
-    { value: 'tags', label: (<span className="flex items-center gap-1.5"><TagsOutlined />按标签</span>) },
-    { value: 'topics', label: (<span className="flex items-center gap-1.5"><ApartmentOutlined />按主题</span>) },
-    { value: 'stats', label: (<span className="flex items-center gap-1.5"><BarChartOutlined />统计</span>) },
+    { value: 'tags', label: (<span className="w-full justify-center flex items-center gap-1.5"><TagsOutlined />按标签</span>) },
+    { value: 'topics', label: (<span className="w-full justify-center flex items-center gap-1.5"><ApartmentOutlined />按主题</span>) },
+    { value: 'stats', label: (<span className="w-full justify-center flex items-center gap-1.5"><BarChartOutlined />统计</span>) },
   ];
 
   // 视图布局 Segmented 选项
@@ -246,9 +246,9 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
                 setMobileMenuVisible(false);
               }}
               options={[
-                { value: 'crm', label: (<span className="flex items-center gap-1"><TagsOutlined />人脉</span>) },
-                { value: 'rosters', label: (<span className="flex items-center gap-1"><TableOutlined />名单</span>) },
-                { value: 'tools', label: (<span className="flex items-center gap-1"><ToolOutlined />工具</span>) },
+                { value: 'crm', label: (<span className="w-full justify-center flex items-center gap-1"><TagsOutlined />人脉</span>) },
+                { value: 'rosters', label: (<span className="w-full justify-center flex items-center gap-1"><TableOutlined />名单</span>) },
+                { value: 'tools', label: (<span className="w-full justify-center flex items-center gap-1"><ToolOutlined />工具</span>) },
               ]}
             />
           </div>
