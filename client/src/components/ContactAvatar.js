@@ -13,7 +13,9 @@ export default function ContactAvatar({ faceUuid, name, avatarConfig, sizeClass,
     // 阻止菜单点击事件冒泡到父级，避免触发父级 onClick 打开详情/编辑弹窗
     domEvent?.stopPropagation();
     if (key === 'immich' && faceUuid) {
-      const immichUrl = `http://${window.location.hostname}:2283/people/${faceUuid}`;
+      // Immich 已收归 home.lan（容器端口仅 127.0.0.1 监听），
+      // 「在 Immich 中浏览」固定走 https://photo.home.lan，不再直连 IP:2283
+      const immichUrl = `https://photo.home.lan/people/${faceUuid}`;
       window.open(immichUrl, '_blank', 'noopener,noreferrer');
     } else if (key === 'preview' && faceUuid) {
       // 复用 AuthenticatedAvatar 缓存获取头像原图 URL，用于大图预览
