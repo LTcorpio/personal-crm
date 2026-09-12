@@ -318,8 +318,12 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
       } else {
         form.resetFields();
       }
-      // 打开时即取快照：把表单默认值也纳入基准，避免默认值被误判为改动
-      initialValuesRef.current = form.getFieldsValue();
+      // 打开时即取快照：把表单默认值也纳入基准，避免默认值被误判为改动。
+      // 必须用 getFieldsValue(true) 取全量 store，而非默认的 getFieldsValue()：
+      // 后者只返回「已注册 Field 实体」的字段，而 Modal 内的 <Form> 是懒挂载的
+      // （@rc-component/motion 的 CSSMotion 要等下一帧才渲染 children），
+      // 此刻字段尚未注册，getFieldsValue() 会返回空对象，导致快照为空、后续永远判「无改动」。
+      initialValuesRef.current = form.getFieldsValue(true);
     }
   }, [visible, contact, form]);
 
@@ -358,8 +362,12 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
     const baseline = initialValuesRef.current;
     // 尚未快照（例如从未成功打开过）时，保守起见按无改动处理
     if (!baseline) return false;
-    const values = form.getFieldsValue();
-    for (const key of Object.keys(baseline)) {
+    const values = form.getFieldsValue(true);
+    // 并集遍历（而非只遍历 baseline 的 key）：
+    // 新建联系人时 baseline 只含 initialValues（如 gender），用户新填的 name 等字段
+    // 不在 baseline 里，若只遍历 baseline 会漏检「新建时填了字段就关闭」的场景。
+    const keys = new Set([...Object.keys(values), ...Object.keys(baseline)]);
+    for (const key of keys) {
       const a = normalizeCompare(values[key]);
       const b = normalizeCompare(baseline[key]);
       if (JSON.stringify(a) !== JSON.stringify(b)) return true;

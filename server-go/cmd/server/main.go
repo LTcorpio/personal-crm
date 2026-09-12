@@ -69,9 +69,10 @@ func main() {
 
 	// 启动后异步补全存量头像：把所有「已绑定 face_uuid 但本地还没图」的联系人抓到本地。
 	// 放在后台执行，不阻塞端口监听。
-	backfillCtx, cancelBackfill := context.WithCancel(ctx)
-	defer cancelBackfill()
-	go server.BackfillAvatarsOnStartup(backfillCtx)
+	// 已关闭（如需重新开启，取消下方注释即可）：
+	// backfillCtx, cancelBackfill := context.WithCancel(ctx)
+	// defer cancelBackfill()
+	// go server.BackfillAvatarsOnStartup(backfillCtx)
 
 	serverErr := make(chan error, 1)
 	go func() {
