@@ -16,3 +16,101 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* ==========================================================================
+   滚动条自定义：不使用系统原生滚动条
+   1. 隐藏所有原生滚动条（保留滚动能力），滚动条出现/消失都不占布局宽度
+   2. 由 src/utils/overlayScrollbar.js 自绘悬浮滚动条（.osb-track / .osb-thumb）
+      - 轨道 position: fixed 挂在 body 上，坐标由 JS 依据容器位置计算
+      - 滚动/悬停时显示，静止片刻后自动隐藏；滑块可拖拽
+   ========================================================================== */
+
+/* 1. 隐藏原生滚动条（WebKit 系 / Firefox / 旧版 Edge） */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* 2. 自绘悬浮滚动条：轨道 */
+.osb-track {
+  position: fixed;
+  z-index: 9999;
+  border-radius: 999px;
+  opacity: 0;
+  /* 轨道本身不拦截内容点击，只有滑块可交互 */
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.osb-track-y {
+  width: 8px;
+}
+
+.osb-track-x {
+  height: 8px;
+}
+
+/* 悬停容器 / 滚动中 / 拖拽中 → 显示 */
+.osb-track.osb-visible,
+.osb-track.osb-dragging {
+  opacity: 1;
+}
+
+/* 3. 自绘悬浮滚动条：滑块 */
+.osb-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: auto;
+  background-color: rgba(71, 85, 105, 0.32);
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
+  touch-action: none;
+}
+
+.osb-thumb-y {
+  width: 100%;
+}
+
+.osb-thumb-x {
+  height: 100%;
+}
+
+.osb-thumb:hover {
+  background-color: rgba(51, 65, 85, 0.5);
+}
+
+.osb-track.osb-dragging .osb-thumb {
+  background-color: rgba(51, 65, 85, 0.62);
+}
+
+/* 拖拽滑块时禁止选中文本 */
+body.osb-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 触屏设备：滚动由系统手势处理，滑块更细，仅在滚动时短暂出现 */
+@media (hover: none) {
+  .osb-track-y {
+    width: 4px;
+  }
+
+  .osb-track-x {
+    height: 4px;
+  }
+}
+
+/* 尊重「减少动态效果」偏好：去掉淡入淡出 */
+@media (prefers-reduced-motion: reduce) {
+  .osb-track,
+  .osb-thumb {
+    transition: none;
+  }
+}
