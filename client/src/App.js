@@ -40,6 +40,9 @@ export default function App() {
       theme={{
         token: {
           fontFamily: '"LXGW WenKai Screen", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          motionDurationFast: '0.1s',
+          motionDurationMid: '0.1s',
+          motionDurationSlow: '0.1s',
         },
       }}
       locale={zhCN}
