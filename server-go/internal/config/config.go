@@ -14,6 +14,10 @@ import (
 	"strings"
 )
 
+// DefaultImmichBaseURL Immich 服务默认地址（home.lan 内网入口）。
+// 仅在同步/抓取头像时需要 Immich，日常展示走本地文件，不依赖此地址。
+const DefaultImmichBaseURL = "https://photo.home.lan"
+
 var (
 	// Port 服务监听端口（PORT，默认 15197，与 server.js 一致）
 	Port int
@@ -23,8 +27,14 @@ var (
 	CRMDBPath string
 	// RosterDBPath 名单库文件路径（$DB_DIR/roster.db）
 	RosterDBPath string
+	// AvatarDir 头像文件目录（AVATAR_DIR，默认 $DB_DIR/avatars，与数据库同盘同目录便于整体备份）
+	AvatarDir string
 	// StaticDir 前端静态资源目录（Docker 部署时为 ./public）
 	StaticDir string
+	// ImmichBaseURL Immich 服务地址（IMMICH_BASE_URL）
+	ImmichBaseURL string
+	// ImmichAPIKey Immich API Key（IMMICH_API_KEY）
+	ImmichAPIKey string
 )
 
 func init() {
@@ -41,7 +51,26 @@ func init() {
 	CRMDBPath = filepath.Join(DBDir, "crm.db")
 	RosterDBPath = filepath.Join(DBDir, "roster.db")
 
+	// 头像目录：显式配置 AVATAR_DIR 时用它，否则跟随数据库目录。
+	// 放在 DB_DIR 下可让备份服务「按目录整体拷贝」时自动覆盖头像。
+	AvatarDir = strings.TrimSpace(os.Getenv("AVATAR_DIR"))
+	if AvatarDir == "" {
+		AvatarDir = filepath.Join(DBDir, "avatars")
+	}
+
 	StaticDir = "public"
+
+	// Immich 仅在「从 Immich 拉取头像」时需要，配置缺失不影响服务启动。
+	ImmichBaseURL = strings.TrimRight(strings.TrimSpace(os.Getenv("IMMICH_BASE_URL")), "/")
+	if ImmichBaseURL == "" {
+		ImmichBaseURL = DefaultImmichBaseURL
+	}
+	ImmichAPIKey = strings.TrimSpace(os.Getenv("IMMICH_API_KEY"))
+}
+
+// ImmichConfigured 判断是否具备从 Immich 抓取头像的条件。
+func ImmichConfigured() bool {
+	return ImmichBaseURL != "" && ImmichAPIKey != ""
 }
 
 // loadDotEnv 解析 .env 文件，语义对齐 dotenv：仅设置尚不存在的环境变量。

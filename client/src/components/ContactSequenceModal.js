@@ -65,7 +65,7 @@ export default function ContactSequenceModal({ open, onClose, contacts, onSaveSu
       onCancel={onClose}
       onOk={handleSave}
       confirmLoading={saveLoading}
-      destroyOnClose
+      destroyOnHidden
       okText="保存序列"
       cancelText="取消"
       width="80%"

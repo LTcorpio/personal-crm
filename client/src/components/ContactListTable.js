@@ -11,7 +11,9 @@ export default function ContactListTable({
   setFormVisible,
   handleDeleteContact,
   avatarConfig,
-  editMode = true
+  editMode = true,
+  onAvatarChange,
+  onOpenEdit
 }) {
   const columns = [
     ...columnConfigs
@@ -30,7 +32,14 @@ export default function ContactListTable({
               >
                 <ContactAvatar
                   faceUuid={record.face_uuid}
+                  thumbUrl={record.face_thumb_url}
                   name={record.name}
+                  contactId={record.id}
+                  contactName={record.name}
+                  onAvatarChange={onAvatarChange}
+                  onOpenEdit={() => onOpenEdit?.(record)}
+                  onOpenView={() => setDetailContact(record)}
+                  editMode={editMode}
                   avatarConfig={avatarConfig}
                   sizeClass="w-9 h-9"
                   textClass="text-[16px]"

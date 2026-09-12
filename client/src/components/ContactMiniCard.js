@@ -2,8 +2,8 @@ import React from 'react';
 import { Tag } from 'antd';
 import ContactAvatar from './ContactAvatar';
 
-export default function ContactMiniCard({ contact, onClick, avatarConfig }) {
-  const { face_uuid, name, gender, title } = contact;
+export default function ContactMiniCard({ contact, onClick, avatarConfig, onAvatarChange, onOpenEdit, onOpenView, editMode = true }) {
+  const { face_uuid, face_thumb_url, name, gender, title } = contact;
 
   return (
     <div 
@@ -14,7 +14,14 @@ export default function ContactMiniCard({ contact, onClick, avatarConfig }) {
       <div className="flex-shrink-0">
         <ContactAvatar 
           faceUuid={face_uuid} 
+          thumbUrl={face_thumb_url}
           name={name} 
+          contactId={contact.id}
+          contactName={name}
+          onAvatarChange={onAvatarChange}
+          onOpenEdit={onOpenEdit}
+          onOpenView={onOpenView}
+          editMode={editMode}
           avatarConfig={avatarConfig}
           sizeClass="w-14 h-14"
           textClass="text-[24px]"

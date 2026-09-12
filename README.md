@@ -8,7 +8,10 @@
 - **多级标签**：任意层级标签树（如 `同学/大学同学/智能1班`），保存联系人时按路径自动建树；标签绑定联系人时禁止删除，防止误删
 - **主题分组**：自定义主题分类，成员支持绑定联系人或自由命名，带排序与备注
 - **名单管理**：导入 `.xls` / `.xlsx` Excel 名单，支持关键字搜索、多列组合筛选（列间 AND / 列内 OR）、列值去重下拉、重命名与排序
-- **人脸头像**：对接 [Immich](https://immich.app)，通过 face_uuid 经后端代理拉取人脸缩略图，API Key 不暴露给前端
+- **人脸头像（本地化）**：头像图片全部落盘到 `$DB_DIR/avatars`，与数据库同盘同目录，展示不再实时依赖 [Immich](https://immich.app)；Immich 的 `face_uuid` 仍保留，用于「右键头像 → 在 Immich 中浏览」跳转。图片按内容 SHA-256 命名，同一张图全库只存一份
+- **本地图片裁剪**：上传本地图片时在浏览器内裁剪成正方形（导出 512×512 JPEG），裁剪前的原图一并原样存档，历史里可随时「查看 / 下载原图」或「重新裁剪」
+- **历史头像管理**：记录每位联系人用过的每一张头像，标注来源（Immich / 本地上传）与是否裁剪过，支持回看、回切为当前、重新裁剪、删除；当前头像不可直接删除，物理文件在无任何引用时才回收。弹窗内的切换 / 上传 / 删除都只改本地草稿，点弹窗「保存」才真正生效，直接关闭则全部丢弃
+- **改动保护**：头像弹窗与联系人编辑表单在存在未保存改动时，关闭前都会二次确认，避免误关丢失编辑内容
 - **安全认证**：密码登录 + JWT（7 天有效期）+ 服务端会话表，支持在线修改密码与密钥；密码使用 PBKDF2-SHA512 存储
 - **精细差异比对**：保存时快照比对新旧数据，无实际修改不刷新 `updated_at` 时间戳
 - **双后端实现**：Node.js（`server/`）与 Go（`server-go/`）行为完全对齐，接口契约一致，可任选其一部署
@@ -75,7 +78,7 @@ go run ./cmd/server
 ```bash
 cd client
 npm install
-echo "REACT_APP_BACKEND_PORT=15197" > .env   # 开发模式指向后端端口
+cp .env.example .env       # 开发模式指向后端端口，可按需改 PORT / REACT_APP_BACKEND_PORT
 npm start                  # http://localhost:3000
 ```
 
@@ -91,17 +94,20 @@ npm start                  # http://localhost:3000
 docker build -t personal-crm .
 docker run -d \
   -p 5197:5197 \
-  -e PORT=5197 \
-  -e JWT_SECRET=你的密钥 \
-  -e CRM_PASSWORD=你的初始密码 \
-  -v "/path/to/DockerData/personal-crm:/app/server/data" \
+  -e IMMICH_BASE_URL=https://photo.home.lan \
+  -e IMMICH_API_KEY=你的Immich密钥 \
+  -v "/Volumes/ZHITAI TiPlus5000 1TB/Docker/compose/lifestyle/personal-crm:/app/data" \
   --name personal-crm \
   personal-crm
 ```
 
 镜像内已包含：前端构建产物（`public/`）+ Go 后端二进制，单容器即可运行。
 
-数据持久化：将宿主机生产库目录（OneDrive 同步的 `DockerData/personal-crm`，含 `crm.db` 与 `roster.db`）bind mount 到容器内 `/app/server/data`，与原 Node 版部署共用同一份生产数据；未指定 `DB_DIR` 时容器默认读写该目录。
+> 容器内默认 `PORT=5197`、`DB_DIR=/app/data`，无需重复传入。
+
+数据持久化：把宿主机数据目录（含 `crm.db`、`roster.db` 以及本地化后的 `avatars/` 头像目录）
+bind mount 到容器内 `/app/data` 即可。头像与数据库同目录，外部备份服务按目录整体拷贝时
+会自动覆盖，无需额外配置。
 
 ## 环境变量
 
@@ -109,20 +115,42 @@ docker run -d \
 | --- | --- | --- |
 | `PORT` | 后端监听端口 | `15197` |
 | `DB_DIR` | SQLite 数据目录（Node 版相对 `server/`，Go 版相对工作目录） | `data` |
-| `JWT_SECRET` | JWT 签名密钥，缺省时首次启动自动生成并入库 | 随机生成 |
-| `CRM_PASSWORD` | 初始登录密码，仅首次初始化生效 | `admin123` |
-| `IMMICH_BASE_URL` | Immich 服务地址（人脸头像代理） | 无 |
-| `IMMICH_API_KEY` | Immich API Key | 无 |
+| `AVATAR_DIR` | 头像文件目录（可选），默认跟随数据库目录 | `$DB_DIR/avatars` |
+| `IMMICH_BASE_URL` | Immich 服务地址，仅「抓取 / 同步头像」时访问 | `https://photo.home.lan` |
+| `IMMICH_API_KEY` | Immich API Key，留空则跳过一切头像抓取（已有本地头像不受影响） | 无 |
 | `REACT_APP_BACKEND_PORT` | （仅前端开发模式）后端端口 | 无 |
 
-以上变量均可写入后端目录的 `.env` 文件（`server/.env` 与 `server-go/.env` 内容保持一致，均指向同一生产库目录与 Immich 配置；`.env` 已被 `.dockerignore` / `.gitignore` 排除，不会进入镜像与仓库）。
+> `JWT_SECRET` / `CRM_PASSWORD` 属于 Node 版；当前 Go 版的身份认证已交给反向代理层（Authelia SSO），不再使用这两项。
+
+以上变量均可写入 `.env` 文件（`client/.env`、`server/.env`、`server-go/.env`）。
+
+**`.env` 不入库，仓库里只提交 `.env.example`。** 各目录均提供 `client/.env.example`、`server/.env.example`、`server-go/.env.example`，复制成 `.env` 后按需修改即可；`.env` 已被根 `.gitignore` 与 `.dockerignore` 排除，含密钥与本机路径的真实配置不会进入仓库或镜像。
 
 ## 数据库说明
 
-- `crm.db`：联系人主库（`contacts`、`tags`、`contact_tags`、`contact_topics`、`contact_topic_members`、`contact_relations`、`contact_methods`、`former_names`、`system_settings`、`active_sessions`）
+- `crm.db`：联系人主库（`contacts`、`tags`、`contact_tags`、`contact_topics`、`contact_topic_members`、`contact_relations`、`contact_methods`、`former_names`、`contact_avatars`、`system_settings`、`active_sessions`）
 - `roster.db`：名单库（`rosters`、`roster_rows`）
-- 启动时自动建表；标签/主题删除采用安全级联（仍绑定联系人时拒绝删除）
-- 会话表自动清理 7 天前的过期 Token
+- `avatars/`：本地头像文件目录，文件名即图片内容的 SHA-256（`<hash>.<ext>`），同一张图全库只存一份
+- 启动时自动建表并做轻量列迁移（如 `contacts.avatar_hash`）；标签/主题删除采用安全级联（仍绑定联系人时拒绝删除）
+
+### 头像数据模型
+
+| 位置 | 作用 |
+| --- | --- |
+| `contacts.face_uuid` | Immich 人物 UUID，仅用于「在 Immich 中浏览」跳转 |
+| `contacts.avatar_hash` | 当前头像指向的内容哈希 |
+| `contact_avatars` | 每位联系人用过的历史头像（`hash` + `face_uuid` + `source`，上传来源另存 `original_hash` / `original_file_name`），`UNIQUE(contact_id, hash)` |
+| `$AVATAR_DIR/<hash>.<ext>` | 头像文件：展示用方图与裁剪前的原图同目录存放，按内容寻址，全局去重 |
+
+- 抓取时机：后端启动时自动补齐「已绑定 face_uuid 但本地无图」的联系人；修改 `face_uuid` 保存时自动抓取；
+  前端头像管理弹窗内可手动「从 Immich 获取」或「上传本地图片」
+- 生效时机：头像弹窗内的改动（切换当前 / 上传 / 删除历史）先留在本地草稿，点弹窗「保存」才写库；直接关闭则丢弃
+- 上传流程：前端裁剪成正方形后，把方图与裁剪前的原图（可选）一起提交，两者都按内容哈希落盘去重；
+  选「不裁剪，直接用原图」时只传一份（`original_is_file` 标记），后端把方图同时认定为原图
+- 重新裁剪：带原图的历史头像可随时「重新裁剪」，前端取回存档原图重新取景，结果作为一张新头像入库，原图沿用不重复占盘
+- 原图下载：`GET /api/avatars/<file>?download=1[&filename=]<可选文件名>` 以附件形式返回（下载名同时给出 ASCII 回退与 RFC 5987 UTF-8 形式，并过滤引号 / 控制字符等危险字符）
+- 删除规则：当前头像不可直接删除；磁盘文件（含原图）仅当「方图列 + 原图列」全局都无引用时才回收
+- 清空 `face_uuid` 不会删除本地头像——两者已解耦
 
 ## 关于双后端
 

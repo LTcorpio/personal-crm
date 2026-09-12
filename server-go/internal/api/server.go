@@ -14,21 +14,24 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"crm-server/internal/avatar"
 )
 
 // jsonBodyLimit 与 Express express.json({ limit: '50mb' }) 一致。
 const jsonBodyLimit = 50 << 20
 
-// Server 聚合数据库连接。
+// Server 聚合数据库连接与本地头像仓库。
 type Server struct {
 	crm       *sql.DB
 	roster    *sql.DB
 	staticDir string
+	avatars   *avatar.Store
 }
 
 // NewServer 创建 API 服务。
-func NewServer(crm, roster *sql.DB, staticDir string) *Server {
-	return &Server{crm: crm, roster: roster, staticDir: staticDir}
+func NewServer(crm, roster *sql.DB, staticDir string, avatars *avatar.Store) *Server {
+	return &Server{crm: crm, roster: roster, staticDir: staticDir, avatars: avatars}
 }
 
 // Handler 构建完整的 HTTP 处理链：CORS -> 请求体限制 -> 路由。
@@ -49,6 +52,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/topics/order", s.handleUpdateTopicsOrder)
 	mux.HandleFunc("PUT /api/topics/{id}", s.handleUpdateTopic)
 	mux.HandleFunc("DELETE /api/topics/{id}", s.handleDeleteTopic)
+
+	// ===== 头像：本地文件 + 历史管理（对应 avatars.go）=====
+	// 展示一律走本地文件，Immich 仅在「抓取/同步」时被访问
+	mux.HandleFunc("GET /api/avatars/{file}", s.handleServeAvatar)
+	mux.HandleFunc("POST /api/avatars/sync", s.handleSyncAvatars)
+	mux.HandleFunc("GET /api/contacts/{id}/avatars", s.handleListContactAvatars)
+	mux.HandleFunc("PUT /api/contacts/{id}/avatar", s.handleSetContactAvatar)
+	mux.HandleFunc("POST /api/contacts/{id}/avatar/fetch", s.handleFetchContactAvatar)
+	mux.HandleFunc("POST /api/contacts/{id}/avatar/upload", s.handleUploadContactAvatar)
+	mux.HandleFunc("DELETE /api/contacts/{id}/avatars/{hash}", s.handleDeleteContactAvatar)
+
+	// ===== Immich 实时缩略图代理 =====
+	// 保留给「尚未保存的新联系人预览 UUID 头像」使用，日常展示不再依赖它
 	mux.HandleFunc("GET /api/proxy-face/{uuid}", s.handleProxyFace)
 
 	// ===== /api/rosters 名单路由（对应 rosterRoutes.js）=====

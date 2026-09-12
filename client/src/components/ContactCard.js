@@ -4,7 +4,7 @@ import { PhoneOutlined, MailOutlined, EnvironmentOutlined, IdcardOutlined, Wecha
 import Markdown from 'react-markdown';
 import ContactAvatar from './ContactAvatar';
 
-export default function ContactCard({ contact, onClick, noBorder = false, onRelatedClick, avatarConfig }) {
+export default function ContactCard({ contact, onClick, noBorder = false, onRelatedClick, avatarConfig, onAvatarChange, onOpenEdit, onOpenView, editMode = true }) {
   // 从全路径标签中提取叶子节点的简写用于展示
   const getLeafTagName = (path) => path.split('/').pop();
 
@@ -72,7 +72,14 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
         {/* 头像区域 */}
         <ContactAvatar 
           faceUuid={contact.face_uuid} 
+          thumbUrl={contact.face_thumb_url}
           name={contact.name} 
+          contactId={contact.id}
+          contactName={contact.name}
+          onAvatarChange={onAvatarChange}
+          onOpenEdit={onOpenEdit}
+          onOpenView={onOpenView}
+          editMode={editMode}
           avatarConfig={avatarConfig}
           sizeClass="w-16 h-16"
           textClass="text-[28px]"

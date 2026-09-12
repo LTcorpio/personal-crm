@@ -115,6 +115,24 @@ func OpenCRM(path string) (*sql.DB, error) {
             FOREIGN KEY (topic_id) REFERENCES contact_topics(id) ON DELETE CASCADE,
             FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL
         )`,
+		// 9. 联系人历史头像表
+		//    hash 是图片内容的 SHA-256，file_name 是其在头像目录中的落盘文件名（<hash><ext>）。
+		//    同一张图在磁盘上只存一份；本表按 (contact_id, hash) 去重，
+		//    用于记录「这位联系人曾经用过哪些头像」，支持回看 / 回切 / 删除。
+		`CREATE TABLE IF NOT EXISTS contact_avatars (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            contact_id TEXT NOT NULL,
+            hash TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            face_uuid TEXT,
+            source TEXT NOT NULL DEFAULT 'immich',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(contact_id, hash),
+            FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE
+        )`,
+		`CREATE INDEX IF NOT EXISTS idx_contact_avatars_contact ON contact_avatars(contact_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_contact_avatars_hash ON contact_avatars(hash)`,
 	}
 
 	for _, stmt := range statements {
@@ -123,5 +141,59 @@ func OpenCRM(path string) (*sql.DB, error) {
 			return nil, fmt.Errorf("初始化 CRM 表结构失败: %w", err)
 		}
 	}
+
+	// 轻量迁移：老库补齐后续版本新增的列（SQLite 不支持 ADD COLUMN IF NOT EXISTS）
+	if err := ensureColumn(db, "contacts", "avatar_hash", "TEXT"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "contact_avatars", "original_hash", "TEXT"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "contact_avatars", "original_file_name", "TEXT"); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return db, nil
+}
+
+// ensureColumn 确保指定表存在某列，缺失时按 columnDef 补齐。
+func ensureColumn(db *sql.DB, table, column, columnDef string) error {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return fmt.Errorf("读取表结构失败(%s): %w", table, err)
+	}
+	found := false
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			ctype     string
+			notNull   int
+			dfltValue sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &dfltValue, &pk); err != nil {
+			rows.Close()
+			return err
+		}
+		if name == column {
+			found = true
+			break
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if found {
+		return nil
+	}
+
+	if _, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + columnDef); err != nil {
+		return fmt.Errorf("迁移失败(%s.%s): %w", table, column, err)
+	}
+	log.Printf("[数据库迁移] %s 表已新增列: %s %s", table, column, columnDef)
+	return nil
 }

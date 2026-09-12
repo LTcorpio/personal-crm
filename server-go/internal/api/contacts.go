@@ -1,15 +1,19 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"math"
 	"math/rand/v2"
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 
+	"crm-server/internal/config"
 	"crm-server/internal/web"
 )
 
@@ -69,7 +73,7 @@ type tagRow struct {
 	parentID sql.NullInt64
 }
 
-const contactColumns = `id, face_uuid, name, gender, ethnicity, native_place, title, birthday_solar, birthday_lunar, deathday, id_card, location, address, extra, remark, sort_order, created_at, updated_at`
+const contactColumns = `id, face_uuid, name, gender, ethnicity, native_place, title, birthday_solar, birthday_lunar, deathday, id_card, location, address, extra, remark, sort_order, created_at, updated_at, avatar_hash`
 
 type contactRecord struct {
 	id            string
@@ -90,6 +94,7 @@ type contactRecord struct {
 	sortOrder     sql.NullInt64
 	createdAt     sql.NullString
 	updatedAt     sql.NullString
+	avatarHash    sql.NullString
 }
 
 func scanContact(scanner interface{ Scan(dest ...any) error }) (*contactRecord, error) {
@@ -97,7 +102,7 @@ func scanContact(scanner interface{ Scan(dest ...any) error }) (*contactRecord, 
 	err := scanner.Scan(
 		&c.id, &c.faceUUID, &c.name, &c.gender, &c.ethnicity, &c.nativePlace, &c.title,
 		&c.birthdaySolar, &c.birthdayLunar, &c.deathday, &c.idCard, &c.location, &c.address,
-		&c.extra, &c.remark, &c.sortOrder, &c.createdAt, &c.updatedAt,
+		&c.extra, &c.remark, &c.sortOrder, &c.createdAt, &c.updatedAt, &c.avatarHash,
 	)
 	if err != nil {
 		return nil, err
@@ -123,6 +128,7 @@ func (s *Server) handleSaveContact(w http.ResponseWriter, r *http.Request) {
 	var (
 		isExisting        bool
 		mainFieldsChanged bool
+		oldFaceUUID       string
 		methodsRows       []contactMethodRow
 		relationsRows     []oldRelationRow
 		formerNames       []string
@@ -139,6 +145,7 @@ func (s *Server) handleSaveContact(w http.ResponseWriter, r *http.Request) {
 		}
 		if rec != nil {
 			isExisting = true
+			oldFaceUUID = rec.faceUUID.String
 
 			if formerNames, err = s.loadFormerNames(data.ID); err != nil {
 				logServerError("保存联系人失败:", err)
@@ -414,7 +421,47 @@ func (s *Server) handleSaveContact(w http.ResponseWriter, r *http.Request) {
 		writeErr()
 		return
 	}
+
+	// === 3. 人脸 UUID 变更后，把新头像抓到本地并记为当前头像 ===
+	// 刻意放在事务之外：抓图是外部网络调用，失败也不该影响联系人资料本身的保存。
+	// 若这次抓取失败，头像保持原样，后续「启动补全 / 手动同步」会再次补齐。
+	if newFaceUUID := strings.TrimSpace(data.FaceUUID); newFaceUUID != oldFaceUUID && newFaceUUID != "" {
+		s.captureImmichAvatar(r.Context(), finalContactID, newFaceUUID)
+	}
+
 	web.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "message": "保存成功", "id": finalContactID})
+}
+
+// avatarCaptureTimeout 保存联系人时同步补抓头像的超时上限。
+// 比常规抓取更短：Immich 异常时也不能让「保存联系人」长时间卡住。
+const avatarCaptureTimeout = 4 * time.Second
+
+// captureImmichAvatar 把某个 face_uuid 对应的头像抓到本地，并设为该联系人的当前头像。
+// 失败只记日志（联系人资料已保存成功），下次启动补全或手动同步会再补。
+func (s *Server) captureImmichAvatar(ctx context.Context, contactID, faceUUID string) {
+	if !config.ImmichConfigured() {
+		return
+	}
+	// 表单保存不应被客户端断开连带取消，因此脱离请求上下文，只保留超时约束
+	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), avatarCaptureTimeout)
+	defer cancel()
+
+	data, _, err := fetchImmichThumbnail(fetchCtx, faceUUID)
+	if err != nil {
+		log.Printf("[头像] 自动抓取失败（联系人 %s / UUID %s）: %v", contactID, faceUUID, err)
+		return
+	}
+	if _, err := s.recordAvatar(recordAvatarInput{
+		ContactID:  contactID,
+		Data:       data,
+		FaceUUID:   faceUUID,
+		Source:     avatarSourceImmich,
+		SetCurrent: true,
+	}); err != nil {
+		log.Printf("[头像] 自动保存失败（联系人 %s）: %v", contactID, err)
+		return
+	}
+	log.Printf("[头像] 已随联系人保存自动更新头像（联系人 %s / UUID %s）", contactID, faceUUID)
 }
 
 // ==========================================
@@ -515,9 +562,12 @@ func (s *Server) handleGetContacts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 一次取出全部「哈希 → 文件名」映射，避免为每位联系人单独查询当前头像文件名
+	avatarFileNames := s.loadAvatarFileNames()
+
 	result := make([]contactJSON, 0, len(records))
 	for _, rec := range records {
-		item, err := s.buildContactJSON(rec)
+		item, err := s.buildContactJSON(rec, avatarFileNames)
 		if err != nil {
 			logServerError("获取联系人失败:", err)
 			web.WriteJSON(w, http.StatusInternalServerError, map[string]any{"error": "获取数据失败"})
@@ -542,11 +592,58 @@ func (s *Server) handleGetContacts(w http.ResponseWriter, r *http.Request) {
 // ==========================================
 
 func (s *Server) handleDeleteContact(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.crm.Exec(`DELETE FROM contacts WHERE id = ?`, r.PathValue("id")); err != nil {
+	contactID := r.PathValue("id")
+
+	// 先把该联系人名下的头像文件登记下来：删除联系人会级联清空 contact_avatars，
+	// 之后需要据此回收磁盘上已无任何引用的图片。
+	type avatarFile struct{ hash, fileName string }
+	var owned []avatarFile
+
+	rows, err := s.crm.Query(`
+        SELECT hash, file_name, original_hash, original_file_name
+        FROM contact_avatars WHERE contact_id = ?
+    `, contactID)
+	if err != nil {
 		logServerError("删除联系人失败:", err)
 		web.WriteJSON(w, http.StatusInternalServerError, map[string]any{"error": "删除失败"})
 		return
 	}
+	for rows.Next() {
+		var (
+			f        avatarFile
+			origHash sql.NullString
+			origName sql.NullString
+		)
+		if err := rows.Scan(&f.hash, &f.fileName, &origHash, &origName); err != nil {
+			rows.Close()
+			logServerError("删除联系人失败:", err)
+			web.WriteJSON(w, http.StatusInternalServerError, map[string]any{"error": "删除失败"})
+			return
+		}
+		owned = append(owned, f)
+		// 原图也一起登记：级联删除后同样按引用计数决定是否回收
+		if origHash.Valid && origHash.String != "" {
+			owned = append(owned, avatarFile{origHash.String, origName.String})
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		logServerError("删除联系人失败:", err)
+		web.WriteJSON(w, http.StatusInternalServerError, map[string]any{"error": "删除失败"})
+		return
+	}
+
+	if _, err := s.crm.Exec(`DELETE FROM contacts WHERE id = ?`, contactID); err != nil {
+		logServerError("删除联系人失败:", err)
+		web.WriteJSON(w, http.StatusInternalServerError, map[string]any{"error": "删除失败"})
+		return
+	}
+
+	// 级联删除后仍被其他联系人引用的图片会被 gcAvatarFile 保留
+	for _, f := range owned {
+		s.gcAvatarFile(f.hash, f.fileName)
+	}
+
 	web.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "message": "删除成功"})
 }
 
@@ -767,7 +864,8 @@ func ensureTagPath(tx *sql.Tx, pathStr string) (int64, error) {
 }
 
 // buildContactJSON 组装单条联系人的完整输出。
-func (s *Server) buildContactJSON(rec *contactRecord) (*contactJSON, error) {
+// avatarFileNames 是「哈希 → 头像文件名」的全量映射，由调用方一次性查好后传入。
+func (s *Server) buildContactJSON(rec *contactRecord, avatarFileNames map[string]string) (*contactJSON, error) {
 	formerNames, err := s.loadFormerNames(rec.id)
 	if err != nil {
 		return nil, err
@@ -835,58 +933,69 @@ func (s *Server) buildContactJSON(rec *contactRecord) (*contactJSON, error) {
 		tagPaths = []string{}
 	}
 
+	// 当前头像：avatar_hash 指向本地文件；face_uuid 仅用于「在 Immich 中浏览」等外部跳转。
+	// 两者互相独立：换了 UUID 不代表头像变了，头像也可以在没有 UUID（本地上传）时存在。
+	avatarHash := rec.avatarHash.String
+	avatarFileName := avatarFileNames[avatarHash]
+
 	return &contactJSON{
-		ID:            rec.id,
-		FaceThumbURL:  faceThumbURL(rec.faceUUID),
-		FaceUUID:      rec.faceUUID.String,
-		Tag:           tagPaths,
-		Name:          rec.name,
-		FormerName:    formerNames,
-		Gender:        rec.gender,
-		Ethnicity:     rec.ethnicity.String,
-		NativePlace:   rec.nativePlace.String,
-		Title:         rec.title.String,
-		Relationship:  relationship,
-		BirthdaySolar: rec.birthdaySolar.String,
-		BirthdayLunar: rec.birthdayLunar.String,
-		Deathday:      rec.deathday.String,
-		IDCard:        rec.idCard.String,
-		Location:      rec.location.String,
-		Address:       rec.address.String,
-		Contact:       contactMethods,
-		Related:       related,
-		Extra:         nullStringToAny(rec.extra),
-		Remark:        nullStringToAny(rec.remark),
-		CreatedAt:     nullStringToAny(rec.createdAt),
-		UpdatedAt:     nullStringToAny(rec.updatedAt),
+		ID:             rec.id,
+		FaceThumbURL:   avatarURL(avatarFileName),
+		FaceUUID:       rec.faceUUID.String,
+		AvatarHash:     avatarHash,
+		AvatarFileName: avatarFileName,
+		Tag:            tagPaths,
+		Name:           rec.name,
+		FormerName:     formerNames,
+		Gender:         rec.gender,
+		Ethnicity:      rec.ethnicity.String,
+		NativePlace:    rec.nativePlace.String,
+		Title:          rec.title.String,
+		Relationship:   relationship,
+		BirthdaySolar:  rec.birthdaySolar.String,
+		BirthdayLunar:  rec.birthdayLunar.String,
+		Deathday:       rec.deathday.String,
+		IDCard:         rec.idCard.String,
+		Location:       rec.location.String,
+		Address:        rec.address.String,
+		Contact:        contactMethods,
+		Related:        related,
+		Extra:          nullStringToAny(rec.extra),
+		Remark:         nullStringToAny(rec.remark),
+		CreatedAt:      nullStringToAny(rec.createdAt),
+		UpdatedAt:      nullStringToAny(rec.updatedAt),
 	}, nil
 }
 
 // contactJSON 输出结构（字段顺序与 Node 版 res.json 的键序一致）。
 type contactJSON struct {
-	ID            string            `json:"id"`
-	FaceThumbURL  string            `json:"face_thumb_url"`
-	FaceUUID      string            `json:"face_uuid"`
-	Tag           []string          `json:"tag"`
-	Name          string            `json:"name"`
-	FormerName    []string          `json:"former_name"`
-	Gender        any               `json:"gender"`
-	Ethnicity     string            `json:"ethnicity"`
-	NativePlace   string            `json:"native_place"`
-	Title         string            `json:"title"`
-	Relationship  []string          `json:"relationship"`
-	BirthdaySolar string            `json:"birthday_solar"`
-	BirthdayLunar string            `json:"birthday_lunar"`
-	Deathday      string            `json:"deathday"`
-	IDCard        string            `json:"id_card"`
-	Location      string            `json:"location"`
-	Address       string            `json:"address"`
-	Contact       map[string]string `json:"contact"`
-	Related       []relatedJSON     `json:"related"`
-	Extra         any               `json:"extra"`
-	Remark        any               `json:"remark"`
-	CreatedAt     any               `json:"created_at"`
-	UpdatedAt     any               `json:"updated_at"`
+	ID           string `json:"id"`
+	FaceThumbURL string `json:"face_thumb_url"`
+	FaceUUID     string `json:"face_uuid"`
+	// AvatarHash 当前头像的内容哈希（本地头像文件去重与历史切换的标识）
+	AvatarHash string `json:"avatar_hash"`
+	// AvatarFileName 当前头像的落盘文件名（<hash><ext>）
+	AvatarFileName string            `json:"avatar_file_name"`
+	Tag            []string          `json:"tag"`
+	Name           string            `json:"name"`
+	FormerName     []string          `json:"former_name"`
+	Gender         any               `json:"gender"`
+	Ethnicity      string            `json:"ethnicity"`
+	NativePlace    string            `json:"native_place"`
+	Title          string            `json:"title"`
+	Relationship   []string          `json:"relationship"`
+	BirthdaySolar  string            `json:"birthday_solar"`
+	BirthdayLunar  string            `json:"birthday_lunar"`
+	Deathday       string            `json:"deathday"`
+	IDCard         string            `json:"id_card"`
+	Location       string            `json:"location"`
+	Address        string            `json:"address"`
+	Contact        map[string]string `json:"contact"`
+	Related        []relatedJSON     `json:"related"`
+	Extra          any               `json:"extra"`
+	Remark         any               `json:"remark"`
+	CreatedAt      any               `json:"created_at"`
+	UpdatedAt      any               `json:"updated_at"`
 }
 
 type relatedJSON struct {
@@ -1090,14 +1199,6 @@ func nullStringToAny(ns sql.NullString) any {
 		return nil
 	}
 	return ns.String
-}
-
-// faceThumbURL 生成头像缩略图代理地址。
-func faceThumbURL(faceUUID sql.NullString) string {
-	if !faceUUID.Valid || faceUUID.String == "" {
-		return ""
-	}
-	return "/api/proxy-face/" + faceUUID.String
 }
 
 // randomContactID 等价 Math.random().toString(36).substring(2, 11).toUpperCase()：

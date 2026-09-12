@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Checkbox, Radio, Flex, Tooltip } from 'antd';
-import { OrderedListOutlined, TableOutlined, UserOutlined } from '@ant-design/icons';
+import { message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Checkbox, Radio, Flex, Tooltip, Button } from 'antd';
+import { OrderedListOutlined, TableOutlined, UserOutlined, CloudDownloadOutlined } from '@ant-design/icons';
 import ColumnSetting, { DEFAULT_COLUMNS } from '../components/ColumnSetting';
 import ContactCard from '../components/ContactCard';
 import ContactMiniCard from '../components/ContactMiniCard';
@@ -85,6 +85,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
     return localStorage.getItem('crm_avatar_fallback_type') || 'default';
   });
   const [avatarDrawerVisible, setAvatarDrawerVisible] = useState(false);
+  const [avatarSyncing, setAvatarSyncing] = useState(false);
   const avatarConfig = useMemo(() => ({ showAvatarThumb, avatarFallbackType }), [showAvatarThumb, avatarFallbackType]);
   
   // 列表模式下的列设置
@@ -234,6 +235,26 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
       fetchData();
     } catch (err) {
       message.error('删除失败');
+    }
+  };
+
+  // 手动补齐缺失头像：把已绑定 Immich UUID 但本地还没图的联系人拉到本地。
+  // 平时由后端在启动时自动执行，这里只是兜底入口。
+  const handleSyncAvatars = async () => {
+    setAvatarSyncing(true);
+    try {
+      const res = await contactApi.syncAvatars();
+      const r = res.data?.result || {};
+      if (r.failed > 0) {
+        message.warning(`${res.data?.message}（成功 ${r.fetched} 位，失败 ${r.failed} 位）`);
+      } else {
+        message.success(res.data?.message || '头像同步完成');
+      }
+      fetchData();
+    } catch (err) {
+      message.error('头像同步失败，请检查 Immich 服务是否可达');
+    } finally {
+      setAvatarSyncing(false);
     }
   };
 
@@ -505,6 +526,10 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                         onClick={() => handleOpenEdit(item)}
                         onRelatedClick={handleRelatedClick}
                         avatarConfig={avatarConfig}
+                        onAvatarChange={fetchData}
+                        onOpenEdit={() => handleOpenEdit(item)}
+                        onOpenView={() => setDetailContact(item)}
+                        editMode={editMode}
                       />
                     ))}
                   </div>
@@ -517,6 +542,10 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                         contact={item}
                         onClick={() => setDetailContact(item)}
                         avatarConfig={avatarConfig}
+                        onAvatarChange={fetchData}
+                        onOpenEdit={() => handleOpenEdit(item)}
+                        onOpenView={() => setDetailContact(item)}
+                        editMode={editMode}
                       />
                     ))}
                   </div>
@@ -531,6 +560,8 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                     handleDeleteContact={handleDeleteContact}
                     avatarConfig={avatarConfig}
                     editMode={editMode}
+                    onAvatarChange={fetchData}
+                  onOpenEdit={handleOpenEdit}
                   />
                 )}
                 <div className="text-center text-gray-400 text-xs mt-8 pb-4 tracking-wide">
@@ -583,6 +614,8 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         onCancel={() => { setFormVisible(false); setEditingContact(null); }}
         onSave={handleSaveContact}
         onDelete={handleDeleteContact}
+        // 头像在弹窗内即时落库，这里同步刷新列表与当前编辑对象
+        onAvatarChange={fetchData}
       />
       <ColumnSetting
         visible={settingVisible}
@@ -621,6 +654,10 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
               onRelatedClick={handleRelatedClick}
               noBorder={true}
               avatarConfig={avatarConfig}
+              onAvatarChange={fetchData}
+              onOpenEdit={() => { if (!editMode) return; setDetailContact(null); handleOpenEdit(detailContact); }}
+              onOpenView={() => setDetailContact(detailContact)}
+              editMode={editMode}
             />
           </div>
         )}
@@ -656,7 +693,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         {(crmFeatureMode === 'tags' || crmFeatureMode === 'topics') && <FloatButton icon={<UserOutlined />} tooltip="头像展示设置" onClick={() => setAvatarDrawerVisible(true)} />}
       </FloatButton.Group>
 
-      <Drawer title="头像展示全局配置" placement="bottom" height={200} onClose={() => setAvatarDrawerVisible(false)} open={avatarDrawerVisible} destroyOnClose>
+      <Drawer title="头像展示全局配置" placement="bottom" height={280} onClose={() => setAvatarDrawerVisible(false)} open={avatarDrawerVisible} destroyOnHidden>
         <div className="max-w-md mx-auto">
           <Flex vertical gap="middle">
             <Flex align="center" justify="space-between" className="py-1">
@@ -672,6 +709,18 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                 <Radio value="lastname">姓氏</Radio>
                 <Radio value="fullname">全名</Radio>
               </Radio.Group>
+            </Flex>
+            {/* 头像已本地化：展示只读本地文件，Immich 只在补全缺失头像时被访问 */}
+            <Flex align="center" justify="space-between" className="py-1 border-t border-gray-100 pt-3">
+              <span className="font-medium text-gray-800">
+                补齐缺失头像
+                <div className="text-xs text-gray-400 font-normal mt-0.5">
+                  把「已绑定 Immich UUID 但本地还没有图」的联系人拉取到本地
+                </div>
+              </span>
+              <Button size="small" icon={<CloudDownloadOutlined />} loading={avatarSyncing} onClick={handleSyncAvatars}>
+                同步全部头像
+              </Button>
             </Flex>
           </Flex>
         </div>

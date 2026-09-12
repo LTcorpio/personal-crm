@@ -189,7 +189,7 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
             {/* 编辑/只读模式切换：圆形按钮，以颜色区分当前状态 */}
             {/* 编辑模式 = 蓝色（活跃），只读模式 = 绿色（安全浏览） */}
             {onToggleEditMode && (
-              <Tooltip title={editMode ? '编辑模式 · 点击切换为只读' : '只读模式 · 点击开启编辑'}>
+              <Tooltip title={editMode ? '编辑模式' : '只读模式'}>
                 <Button
                   shape="circle"
                   icon={editMode ? <EditOutlined /> : <EyeOutlined />}

@@ -1,10 +1,13 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Radio, Button, Popconfirm, Tag, Cascader, Popover, Select, AutoComplete } from 'antd';
-import { MinusCircleOutlined, PlusOutlined, HolderOutlined, UserOutlined, EditOutlined } from '@ant-design/icons';
+import {
+  MinusCircleOutlined, PlusOutlined, HolderOutlined, UserOutlined, EditOutlined,
+} from '@ant-design/icons';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { contactApi } from '../api/crmApi';
+import { avatarUrl } from '../api/crmApi';
+import AvatarManagerModal from './AvatarManagerModal';
 
 const commonStyle = {
   cursor: 'move',
@@ -282,15 +285,19 @@ function EditableTagGroup({ value = [], onChange, tagTree }) {
   );
 }
 
-export default function ContactForm({ visible, contact, tagTree = [], contacts = [], onCancel, onSave, onDelete }) {
+export default function ContactForm({ visible, contact, tagTree = [], contacts = [], onCancel, onSave, onDelete, onAvatarChange }) {
   const [form] = Form.useForm();
+  // 打开编辑时对表单值做一次快照，用于判断后续是否产生真实改动
+  const initialValuesRef = React.useRef(null);
 
   const faceUuid = Form.useWatch('face_uuid', form);
   const genderWatch = Form.useWatch('gender', form);
   const relatedValues = Form.useWatch('related', form);
-  const [uuidModalVisible, setUuidModalVisible] = React.useState(false);
-  const [tempUuid, setTempUuid] = React.useState('');
-  const [avatarUrl, setAvatarUrl] = React.useState(null);
+
+  // 头像管理弹窗：这里只保留「是否打开」，具体逻辑收敛到 AvatarManagerModal
+  const [avatarModalVisible, setAvatarModalVisible] = React.useState(false);
+  // 表单里的头像预览：跟随联系人快照刷新
+  const [avatarState, setAvatarState] = React.useState({ hash: '', url: '' });
 
   // 统计关联人里出现次数大于 1 的系统ID，用于行底色高亮提示重复
   const duplicateIds = React.useMemo(() => {
@@ -311,35 +318,21 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
       } else {
         form.resetFields();
       }
+      // 打开时即取快照：把表单默认值也纳入基准，避免默认值被误判为改动
+      initialValuesRef.current = form.getFieldsValue();
     }
   }, [visible, contact, form]);
 
+  // 头像改用本地文件展示，弹窗打开时从联系人快照初始化当前头像
   useEffect(() => {
-    if (!faceUuid) {
-      setAvatarUrl(null);
-      return;
-    }
+    if (!visible) return;
+    setAvatarState({ hash: contact?.avatar_hash || '', url: contact?.face_thumb_url || '' });
+  }, [visible, contact]);
 
-    let currentUrl = null;
+  const openAvatarModal = () => {
+    setAvatarModalVisible(true);
+  };
 
-    contactApi.getAvatar(faceUuid)
-      .then((res) => {
-        // res.data 此时是一个 Blob 对象
-        currentUrl = URL.createObjectURL(res.data);
-        setAvatarUrl(currentUrl);
-      })
-      .catch((err) => {
-        console.error('获取头像失败:', err);
-        setAvatarUrl(null);
-      });
-
-    // 清理函数：组件卸载或 uuid 改变时释放内存，防止内存泄漏
-    return () => {
-      if (currentUrl) {
-        URL.revokeObjectURL(currentUrl);
-      }
-    };
-  }, [faceUuid]);
 
   const handleSubmit = async () => {
     try {
@@ -350,19 +343,54 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
     }
   };
 
-  const openUuidEdit = () => {
-    setTempUuid(faceUuid || '');
-    setUuidModalVisible(true);
+  // 归一化比较值：把 ''/undefined/null 统一视为“未填写”，空数组视为“未填关联”
+  const normalizeCompare = (v) => {
+    if (v === undefined || v === null || v === '') return undefined;
+    if (Array.isArray(v)) {
+      const m = v.map(normalizeCompare);
+      return m.length === 0 ? undefined : m;
+    }
+    return v;
   };
 
-  const saveUuid = () => {
-    form.setFieldsValue({ face_uuid: tempUuid.trim() });
-    setUuidModalVisible(false);
+  // 表单是否相对「打开时快照」有真实改动（快照已把默认值计入基准，规避默认值误判）
+  const hasUnsavedChanges = () => {
+    const baseline = initialValuesRef.current;
+    // 尚未快照（例如从未成功打开过）时，保守起见按无改动处理
+    if (!baseline) return false;
+    const values = form.getFieldsValue();
+    for (const key of Object.keys(baseline)) {
+      const a = normalizeCompare(values[key]);
+      const b = normalizeCompare(baseline[key]);
+      if (JSON.stringify(a) !== JSON.stringify(b)) return true;
+    }
+    return false;
+  };
+
+  // 关闭前确认：改动与打开前无差异时不打扰，有未保存的编辑时才询问，避免误关丢改动。
+  // 不能用 form.isFieldsTouched()：打开时 setFieldsValue(contact) 已把字段标记为 touched，
+  // 会导致“没改任何东西”也弹未保存。这里改为与「打开时快照」逐字段比较。
+  const handleCancel = () => {
+    if (!hasUnsavedChanges()) {
+      onCancel();
+      return;
+    }
+    Modal.confirm({
+      title: '有未保存的修改',
+      content: '关闭后这些修改不会保存，确定继续吗？',
+      okText: '放弃修改并关闭',
+      okButtonProps: { danger: true },
+      cancelText: '继续编辑',
+      onOk: () => {
+        form.resetFields();
+        onCancel();
+      },
+    });
   };
 
   const renderFooter = () => {
     const buttons = [
-      <Button key="back" onClick={onCancel}>
+      <Button key="back" onClick={handleCancel}>
         取消
       </Button>,
       <Button key="submit" type="primary" onClick={handleSubmit}>
@@ -414,7 +442,7 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
       <Modal
         title={renderTitle()}
         open={visible}
-        onCancel={onCancel}
+        onCancel={handleCancel}
         footer={renderFooter()}
         width={1080}
         destroyOnHidden
@@ -437,22 +465,22 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
               
               {/* 头像：移动端稍缩小至 20(80px) 更精致，桌面端保持 28(112px) */}
               <div
-                onClick={openUuidEdit}
+                onClick={openAvatarModal}
                 className="relative w-20 h-20 md:w-28 md:h-28 rounded-full overflow-hidden border-2 cursor-pointer group shadow-sm bg-gray-50 flex items-center justify-center transition-all shrink-0"
-                title="点击配置人脸 UUID"
+                title="点击管理头像"
               >
-                {avatarUrl ? (
-                  <img 
-                    src={avatarUrl} 
-                    alt="人脸缩略图" 
+                {avatarState.url ? (
+                  <img
+                    src={avatarUrl(avatarState.url)}
+                    alt="头像"
                     className="w-full h-full object-cover"
-                    onError={(e) => { e.target.style.display = 'none'; }}
+                    onError={(e) => { e.target.style.visibility = 'hidden'; }}
                   />
                 ) : <UserOutlined className="text-gray-400 text-3xl md:text-4xl" />}
                 {/* Hover 遮罩层 */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-md font-medium transition-opacity gap-1">
                   <EditOutlined className="text-base" />
-                  <span>修改头像</span>
+                  <span>管理头像</span>
                 </div>
               </div>
 
@@ -572,27 +600,16 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
         </Form>
       </Modal>
 
-      {/* 独立轻量级头像设置小弹窗 */}
-      <Modal
-        title="设置人员人脸 UUID"
-        open={uuidModalVisible}
-        onOk={saveUuid}
-        onCancel={() => setUuidModalVisible(false)}
-        width={400}
-        okText="保存"
-        cancelText="取消"
-        destroyOnClose
-      >
-        <div className="pt-2 pb-4">
-          <p className="text-xs text-gray-400 mb-2">人脸数据与 Immich 系统深度绑定，只支持从 Immich 导入，如需新增人脸请先在 Immich 创建。</p>
-          <Input 
-            placeholder="" 
-            value={tempUuid}
-            onChange={(e) => setTempUuid(e.target.value)}
-            allowClear
-          />
-        </div>
-      </Modal>
+      {/* 头像管理弹窗：所有改动先在本地预览，点「保存」才写库 */}
+      <AvatarManagerModal
+        open={avatarModalVisible}
+        contactId={contact?.id}
+        contactName={contact?.name}
+        initialFaceUuid={faceUuid || contact?.face_uuid || ''}
+        onClose={() => setAvatarModalVisible(false)}
+        onSaved={() => onAvatarChange?.()}
+        onFaceUuidChange={(uuid) => form.setFieldsValue({ face_uuid: uuid })}
+      />
     </>
   );
 }

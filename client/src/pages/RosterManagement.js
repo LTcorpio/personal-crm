@@ -620,7 +620,7 @@ export default function RosterManagement() {
             保存顺序
           </Button>,
         ]}
-        destroyOnClose
+        destroyOnHidden
       >
         {editRosterList.length === 0 ? (
           <Empty description="暂无名单" />
@@ -770,7 +770,7 @@ export default function RosterManagement() {
             </Button>,
           ]
         }
-        destroyOnClose
+        destroyOnHidden
       >
         {/* 步骤一：选择要导入的工作表 */}
         {importStep === 'select' && parsedSheets.length > 0 && (
@@ -1009,7 +1009,7 @@ export default function RosterManagement() {
         onCancel={() => { setDetailModalVisible(false); setDetailRoster(null); }}
         width={1000}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         {detailRoster && (
           <div className="flex flex-col gap-3">
@@ -1052,7 +1052,7 @@ export default function RosterManagement() {
             保存
           </Button>,
         ]}
-        destroyOnClose
+        destroyOnHidden
       >
         {filterableEditRoster && (
           <div className="flex flex-col gap-3">
