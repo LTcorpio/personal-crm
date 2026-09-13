@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { Button, Drawer, Segmented, Divider, Menu, Tooltip, Popover } from 'antd';
 import {
   PlusOutlined,
@@ -11,7 +11,6 @@ import {
   EditOutlined,
   EyeOutlined,
   TableOutlined,
-  SlidersOutlined,
   ControlOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -76,6 +75,68 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
   // 当前路由对应的菜单 key
   const currentRouteKey = isCrmPage ? 'crm' : (isRosterPage ? 'rosters' : 'tools');
 
+  // ==================== 右侧按钮文本的自适应显隐 ====================
+  // 「宽度足够就显示文本」不能按屏幕断点判断：Header 左侧宽度随页面/模式变化
+  // （CRM 页比名单/工具页多一个功能模式切换器，约 250px），同一窗口宽度下可用空间并不相同。
+  // 所以这里量测真实可用宽度再决定：
+  //   可用宽度 = Header 内容宽度 − 左侧区域实际占用宽度
+  //   需求宽度 = 右侧按钮全部带文本时的宽度（首帧按带文本渲染时量得，之后缓存复用）
+  const headerRef = useRef(null);
+  const leftRef = useRef(null);
+  const actionsRef = useRef(null);
+  const [showActionLabels, setShowActionLabels] = useState(true);
+  const labelsWidthRef = useRef(0);
+  // 按钮集合的标识（「新增联系人」只在 CRM 页 + 按标签 + 编辑模式下出现），变化时要重新量一次
+  const actionsSignature = `${currentRouteKey}|${crmFeatureMode}|${editMode}`;
+  const actionsSigRef = useRef(actionsSignature);
+
+  const measureActionLabels = useCallback(() => {
+    const header = headerRef.current;
+    const left = leftRef.current;
+    const actions = actionsRef.current;
+    if (!header || !left || !actions) return;
+    if (!labelsWidthRef.current) {
+      // 此刻 DOM 已是「带文本」形态，量到的就是需求宽度
+      labelsWidthRef.current = actions.offsetWidth;
+    }
+    // clientWidth 含左右内边距，扣掉后才是 flex 可用的宽度
+    const style = window.getComputedStyle(header);
+    const paddingX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    // 左侧各块都是 shrink-0（不可压缩），被挤压时 offsetWidth 会小于内容宽度，
+    // 取 max 才能拿到左侧的真实占用；这个值不随右侧是否显示文本而变，因此判断不会来回抖动
+    const leftWidth = Math.max(left.offsetWidth, left.scrollWidth);
+    const enough = header.clientWidth - paddingX - leftWidth >= labelsWidthRef.current + 12; // 12px 留白，保证两组之间仍有间隙
+    setShowActionLabels((prev) => (prev === enough ? prev : enough));
+  }, []);
+
+  // 用 layoutEffect（绘制前执行）避免「先撑开再收起」的闪烁。
+  // 把 showActionLabels 放进依赖，是为了让「先按带文本渲染 → 再量需求宽度」的第二次测量能执行；
+  // measureActionLabels 内部做了同值短路（值没变就不触发更新），不会形成循环。
+  useLayoutEffect(() => {
+    if (actionsSigRef.current !== actionsSignature) {
+      // 按钮集合变了，缓存的「需求宽度」作废，要重新量
+      actionsSigRef.current = actionsSignature;
+      labelsWidthRef.current = 0;
+      if (!showActionLabels) {
+        // 当前是图标形态，先按「带文本」重渲染一轮，下一轮再量
+        setShowActionLabels(true);
+        return;
+      }
+      // 已经是带文本形态，本轮就能直接量
+    }
+    measureActionLabels();
+  }, [actionsSignature, measureActionLabels, showActionLabels]);
+
+  // 窗口/容器尺寸变化时重新判断
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => measureActionLabels());
+    ro.observe(header);
+    if (leftRef.current) ro.observe(leftRef.current);
+    return () => ro.disconnect();
+  }, [measureActionLabels]);
+
   // 当打开抽屉时，去 /public 目录异步获取使用说明
   useEffect(() => {
     if (drawerVisible && !readmeContent) {
@@ -115,9 +176,9 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
   // 视图布局选项已迁入「显示设置」浮窗（DisplaySettingsPanel），此处不再定义
 
   return (
-    <header className="bg-gray-50 shadow-sm border-b border-gray-200 sticky top-0 z-40 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between relative">
+    <header ref={headerRef} className="bg-gray-50 shadow-sm border-b border-gray-200 sticky top-0 z-40 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between relative">
       {/* 1. 左侧区域：Logo + 桌面端页面导航 + CRM 功能模式 */}
-      <div className="flex items-center gap-4 md:gap-6 min-w-0">
+      <div ref={leftRef} className="flex items-center gap-4 md:gap-6 min-w-0">
         <div className="flex items-center gap-2 md:gap-2.5 cursor-pointer shrink-0" onClick={() => navigate('/')}>
           <BrandLogo size={38} />
           <h1 className="text-lg md:text-xl font-bold tracking-tight m-0 sm:block">
@@ -156,7 +217,7 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
       </div>
 
       {/* 2. 右侧区域：动作操作区 */}
-      <div className="flex items-center gap-2 md:gap-3 shrink-0">
+      <div ref={actionsRef} className="flex items-center gap-2 md:gap-3 shrink-0">
         {isCrmPage && crmFeatureMode !== 'stats' && (
           <>
             {/* 新增联系人：仅编辑模式下显示，只读模式直接隐藏 */}
@@ -168,7 +229,7 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
                 onClick={onAddContact}
                 title="新增联系人"
               >
-                <span className="hidden xl:inline">新增联系人</span>
+                {showActionLabels && <span>新增联系人</span>}
               </Button>
             )}
 
@@ -180,17 +241,19 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
               arrow={false}
               content={<DisplaySettingsPanel crmFeatureMode={crmFeatureMode} {...displaySettings} />}
             >
-              <Tooltip title="显示设置">
-                <Button shape="circle" icon={<ControlOutlined />} />
+              <Tooltip title={showActionLabels ? undefined : '显示设置'}>
+                <Button shape={showActionLabels ? 'default' : 'circle'} icon={<ControlOutlined />}>
+                  {showActionLabels && '显示设置'}
+                </Button>
               </Tooltip>
             </Popover>
 
-            {/* 编辑/只读模式切换：圆形按钮，以颜色区分当前状态 */}
+            {/* 编辑/只读模式切换：以颜色区分当前状态 */}
             {/* 编辑模式 = 蓝色（活跃），只读模式 = 绿色（安全浏览） */}
             {onToggleEditMode && (
-              <Tooltip title={editMode ? '编辑模式' : '只读模式'}>
+              <Tooltip title={showActionLabels ? undefined : (editMode ? '编辑模式' : '只读模式')}>
                 <Button
-                  shape="circle"
+                  shape={showActionLabels ? 'default' : 'circle'}
                   icon={editMode ? <EditOutlined /> : <EyeOutlined />}
                   onClick={() => onToggleEditMode(!editMode)}
                   type={editMode ? 'primary' : 'default'}
@@ -199,22 +262,26 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
                     borderColor: '#52c41a',
                     color: '#fff',
                   } : undefined}
-                />
+                >
+                  {showActionLabels && (editMode ? '编辑模式' : '只读模式')}
+                </Button>
               </Tooltip>
             )}
           </>
         )}
 
-        {/* 使用说明按钮：圆形图标，与编辑模式按钮风格一致 */}
-        <Tooltip title="使用说明">
+        {/* 使用说明按钮 */}
+        <Tooltip title={showActionLabels ? undefined : '使用说明'}>
           <Button
-            shape="circle"
+            shape={showActionLabels ? 'default' : 'circle'}
             icon={<FileTextOutlined />}
             onClick={() => setDrawerVisible(true)}
-          />
+          >
+            {showActionLabels && '使用说明'}
+          </Button>
         </Tooltip>
 
-        {/* 移动端菜单唤醒按钮：仅在小屏下显示 */}
+        {/* 移动端菜单唤醒按钮：仅在小屏下显示（图标形态，不参与文本自适应） */}
         <Button
           type="text"
           icon={<MenuOutlined className="text-lg" />}
