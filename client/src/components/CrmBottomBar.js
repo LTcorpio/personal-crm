@@ -1,6 +1,6 @@
 import React from 'react';
-import { Pagination, Button } from 'antd';
-import { RightOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
+import { Pagination } from 'antd';
+import { RightOutlined } from '@ant-design/icons';
 
 export default function CrmBottomBar({
   crmFeatureMode,
@@ -16,23 +16,12 @@ export default function CrmBottomBar({
   sizeChangerLabel,
   paginationReady = true,
   onPageChange,
-  siderCollapsed,
-  onToggleSider,
 }) {
   return (
     <div className="bg-white px-4 py-2.5 sm:px-6 sm:py-3 border-t border-gray-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between text-gray-500 shrink-0">
       
-      {/* 左侧：折叠控制器 + 当前维度状态 */}
+      {/* 左侧：当前维度状态（侧边栏展开/收起按钮已移至主内容区搜索行最左侧） */}
       <div className="flex items-center gap-2 md:gap-3 min-w-0 w-full md:w-auto">
-        <Button
-          type="text"
-          size="small"
-          icon={siderCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          onClick={onToggleSider}
-          className="text-gray-500 hover:text-blue-500 flex items-center justify-center shrink-0"
-          title={siderCollapsed ? "展开侧边栏" : "收起侧边栏"}
-        />
-        
         <span className="text-xs sm:text-sm shrink-0">
           {crmFeatureMode === 'topics' ? '当前主题:' : '当前标签:'}
         </span>

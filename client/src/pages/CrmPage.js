@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Tooltip } from 'antd';
+import { message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Tooltip, Button } from 'antd';
+import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import ColumnSetting, { DEFAULT_COLUMNS } from '../components/ColumnSetting';
 import CardFieldSetting, { resolveCardFields } from '../components/CardFieldSetting';
 import ContactCard from '../components/ContactCard';
@@ -374,6 +375,25 @@ export default function CrmPage({
     }
   };
 
+  // 侧边栏开关：已从底栏移位到主内容区搜索行最左侧（收起/展开停在同一处，始终可见）。
+  // 小屏下侧边栏是 Drawer，同一个按钮改为控制 Drawer 显隐，与原底栏按钮的行为一致。
+  const siderClosed = isSmallScreen ? !drawerSidebarVisible : siderCollapsed;
+  const siderToggleNode = (
+    <>
+      <Tooltip title={siderClosed ? '展开侧边栏' : '收起侧边栏'}>
+        <Button
+          type="text"
+          icon={siderClosed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          onClick={handleToggleSider}
+          className="text-gray-500 hover:text-blue-500 flex items-center justify-center shrink-0"
+        />
+      </Tooltip>
+      {/* 与搜索框之间的细分隔线：h-8（32px）与两侧控件的常规尺寸等高，
+          上下各留 8px，避免图标按钮与输入框视觉上糊在一起 */}
+      <span className="w-px h-8 bg-gray-200 shrink-0" />
+    </>
+  );
+
   const handlePageChange = (page, size) => {
     setCurrentPage(page);
     if (isGridView) {
@@ -523,6 +543,7 @@ export default function CrmPage({
             setSearchTxt={setSearchTxt}
             searchFields={searchFields}
             onSearchFieldsChange={handleSearchFieldsChange}
+            leading={siderToggleNode}
           />
 
           <div id="crm-content" className="flex-1 overflow-y-auto p-6">
@@ -615,8 +636,6 @@ export default function CrmPage({
             sizeChangerLabel={isGridView ? '行' : '条'}
             paginationReady={gridReady}
             onPageChange={handlePageChange}
-            siderCollapsed={isSmallScreen ? drawerSidebarVisible : siderCollapsed}
-            onToggleSider={handleToggleSider}
           />
         </Content>
       </Layout>

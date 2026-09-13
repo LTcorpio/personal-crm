@@ -27,7 +27,8 @@ export default function SearchFilter({
   searchTxt,
   setSearchTxt,
   searchFields = [],
-  onSearchFieldsChange
+  onSearchFieldsChange,
+  leading, // 行首插槽：目前用于放侧边栏「展开/收起」按钮，保持本组件对侧栏状态无感知
 }) {
   const [visible, setVisible] = useState(false);
   // 气泡内部的局部临时状态，防止未点击确定就直接修改了全局搜索行为
@@ -111,14 +112,18 @@ export default function SearchFilter({
   );
 
   return (
-    <div className="bg-white p-4 border-b border-gray-100 shrink-0">
-      <div className="flex gap-2 items-center w-full">
+    // h-12（48px）= 常规尺寸输入框/按钮 32px + 上下各 8px：与 Sidebar 标题行锁定的高度一致，
+    // 两者的 border-b 才能连成一条横贯整屏的线（改高度时须同步改 Sidebar 的标题行）。
+    // 行首左侧留 8px（pl-2）：与「按钮 → 右侧分隔线」的 gap-2（8px）等宽，
+    // 按钮因此正好居中于侧栏线与分隔线之间；无行首插槽时维持原来的 pl-4（16px）
+    <div className="bg-white h-12 pr-4 border-b border-gray-100 shrink-0 flex items-center">
+      <div className={`flex gap-2 items-center w-full ${leading ? 'pl-2' : 'pl-4'}`}>
+        {leading}
         <Input
           placeholder="输入关键字，回车或点击搜索..."
           value={tempSearchTxt}
           onChange={(e) => setTempSearchTxt(e.target.value)}
           onPressEnter={handleTriggerSearch}
-          size='large'
           allowClear
           onClear={() => {
             setTempSearchTxt('');
@@ -128,7 +133,6 @@ export default function SearchFilter({
         <Button 
           type="primary" 
           onClick={handleTriggerSearch}
-          size='large'
           icon={<SearchOutlined />}
         >
           搜索
@@ -143,10 +147,7 @@ export default function SearchFilter({
           placement="bottomLeft"
           overlayClassName="search-filter-popover"
         >
-          <Button
-            icon={<FilterOutlined />}
-            size='large'
-          >
+          <Button icon={<FilterOutlined />}>
             搜索范围 {searchFields.length < OPTIONS.length && `(${searchFields.length})`}
           </Button>
         </Popover>

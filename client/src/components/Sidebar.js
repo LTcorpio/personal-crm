@@ -252,9 +252,9 @@ const Sidebar = forwardRef(function Sidebar({
   return (
     <div className="w-full h-full bg-white flex flex-col">
       {!hideHeader && (
-        <div className="flex items-center justify-between p-4 pb-2 border-b border-gray-100 min-h-[48px]">
-          {/* min-h-[48px] = 上下内边距 24px + 内容行 24px（对齐 size="small" 按钮的 24px 高度）：
-              锁定标题行高度，使只读模式隐藏右侧按钮时容器高度与编辑模式完全一致，切换不再跳动 */}
+        <div className="flex items-center justify-between h-12 px-4 border-b border-gray-100">
+          {/* h-12（48px）：与主内容区搜索区（SearchFilter）锁定同一高度，两条 border-b 连成一条线；
+              内容行 24px 居中（对齐 size="small" 按钮的 24px 高度），只读模式隐藏右侧按钮时高度不变 */}
           <SidebarTitle mode={mode} />
           <SidebarExtra mode={mode} selectedTagPath={selectedTagPath} setSelectedTagPath={setSelectedTagPath} onManageTags={onManageTags} onManageTopics={handleOpenManage} editMode={editMode} />
         </div>
