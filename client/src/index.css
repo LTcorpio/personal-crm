@@ -38,6 +38,8 @@ code {
 }
 
 /* 2. 自绘悬浮滚动条：轨道 */
+/* 尺寸以 overlayScrollbar.js 的 TRACK_SIZE_DESKTOP 为准（那边会写内联 width/height），
+   这里只是兜底；触屏更细的尺寸也在 JS 里按 matchMedia('(hover: none)') 决定 */
 .osb-track {
   position: fixed;
   z-index: 9999;
@@ -49,11 +51,11 @@ code {
 }
 
 .osb-track-y {
-  width: 8px;
+  width: 6px;
 }
 
 .osb-track-x {
-  height: 8px;
+  height: 6px;
 }
 
 /* 悬停容器 / 滚动中 / 拖拽中 → 显示 */
@@ -62,13 +64,13 @@ code {
   opacity: 1;
 }
 
-/* 3. 自绘悬浮滚动条：滑块 */
+/* 3. 自绘悬浮滚动条：滑块（颜色偏淡，滚动时也只做轻提示，不抢内容） */
 .osb-thumb {
   position: absolute;
   top: 0;
   left: 0;
   pointer-events: auto;
-  background-color: rgba(71, 85, 105, 0.32);
+  background-color: rgba(100, 116, 139, 0.2);
   border-radius: 999px;
   transition: background-color 0.15s ease;
   touch-action: none;
@@ -83,28 +85,17 @@ code {
 }
 
 .osb-thumb:hover {
-  background-color: rgba(51, 65, 85, 0.5);
+  background-color: rgba(100, 116, 139, 0.32);
 }
 
 .osb-track.osb-dragging .osb-thumb {
-  background-color: rgba(51, 65, 85, 0.62);
+  background-color: rgba(100, 116, 139, 0.45);
 }
 
 /* 拖拽滑块时禁止选中文本 */
 body.osb-dragging {
   user-select: none;
   -webkit-user-select: none;
-}
-
-/* 触屏设备：滚动由系统手势处理，滑块更细，仅在滚动时短暂出现 */
-@media (hover: none) {
-  .osb-track-y {
-    width: 4px;
-  }
-
-  .osb-track-x {
-    height: 4px;
-  }
 }
 
 /* 尊重「减少动态效果」偏好：去掉淡入淡出 */

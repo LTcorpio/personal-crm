@@ -224,8 +224,9 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
             {editMode && crmFeatureMode === 'tags' && (
               <Button
                 type="primary"
+                shape={showActionLabels ? 'round' : 'circle'}
                 icon={<PlusOutlined />}
-                className="rounded-lg font-medium shadow-sm flex items-center justify-center"
+                className="font-medium shadow-sm flex items-center justify-center"
                 onClick={onAddContact}
                 title="新增联系人"
               >
@@ -242,7 +243,7 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
               content={<DisplaySettingsPanel crmFeatureMode={crmFeatureMode} {...displaySettings} />}
             >
               <Tooltip title={showActionLabels ? undefined : '显示设置'}>
-                <Button shape={showActionLabels ? 'default' : 'circle'} icon={<ControlOutlined />}>
+                <Button shape={showActionLabels ? 'round' : 'circle'} icon={<ControlOutlined />}>
                   {showActionLabels && '显示设置'}
                 </Button>
               </Tooltip>
@@ -253,7 +254,7 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
             {onToggleEditMode && (
               <Tooltip title={showActionLabels ? undefined : (editMode ? '编辑模式' : '只读模式')}>
                 <Button
-                  shape={showActionLabels ? 'default' : 'circle'}
+                  shape={showActionLabels ? 'round' : 'circle'}
                   icon={editMode ? <EditOutlined /> : <EyeOutlined />}
                   onClick={() => onToggleEditMode(!editMode)}
                   type={editMode ? 'primary' : 'default'}
@@ -273,7 +274,7 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
         {/* 使用说明按钮 */}
         <Tooltip title={showActionLabels ? undefined : '使用说明'}>
           <Button
-            shape={showActionLabels ? 'default' : 'circle'}
+            shape={showActionLabels ? 'round' : 'circle'}
             icon={<FileTextOutlined />}
             onClick={() => setDrawerVisible(true)}
           >
@@ -284,6 +285,7 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
         {/* 移动端菜单唤醒按钮：仅在小屏下显示（图标形态，不参与文本自适应） */}
         <Button
           type="text"
+          shape="circle"
           icon={<MenuOutlined className="text-lg" />}
           className="lg:hidden flex items-center justify-center"
           onClick={() => setMobileMenuVisible(true)}

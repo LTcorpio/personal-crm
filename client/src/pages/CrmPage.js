@@ -8,7 +8,7 @@ import ContactDetail from '../components/ContactDetail';
 import ContactMiniCard from '../components/ContactMiniCard';
 import ContactForm from '../components/ContactForm';
 import ContactListTable from '../components/ContactListTable';
-import Sidebar, { SidebarTitle, SidebarExtra } from '../components/Sidebar';
+import Sidebar, { SidebarTitle, SidebarExtra, useTagTreeExpand, TagExpandButton } from '../components/Sidebar';
 import ContactSequenceModal from '../components/ContactSequenceModal';
 import TagManagementModal from '../components/TagManagementModal';
 import SearchFilter from '../components/SearchFilter';
@@ -27,6 +27,7 @@ export default function CrmPage({
   editMode = true, setEditMode,
   // 显示类配置：由 App 持有、Header 的「显示设置」浮窗控制，这里只负责消费与渲染
   avatarConfig,
+  showTopicOverview = true, // 「按主题」侧边栏底部人物概览的显隐
   refreshTick = 0,
   columnSettingVisible, setColumnSettingVisible,
   cardFieldSettingVisible, setCardFieldSettingVisible,
@@ -359,6 +360,10 @@ export default function CrmPage({
   const isLastPage = safeCurrentPage >= maxPage;
   const processedTagTree = enrichTreeWithCounts(tagTree, contacts);
 
+  // 标签树「一键展开 / 收起」：状态放在这里，桌面侧栏标题栏与 Drawer 标题栏才能共用同一份展开状态
+  const { expandedKeys, setExpandedKeys, expandMenuItems, handleExpandMenuClick } = useTagTreeExpand(processedTagTree);
+  const tagExpandNode = <TagExpandButton items={expandMenuItems} onMenuClick={handleExpandMenuClick} />;
+
   // 持久化的页码可能超出总页数（如数据被删除后），自动跳到最后一页
   // 网格视图需等列数测量完成后再钳制，避免用错误的 maxPage 误判
   useEffect(() => {
@@ -421,6 +426,10 @@ export default function CrmPage({
           selectedTagPath={selectedTagPath}
           setSelectedTagPath={setSelectedTagPath}
           onManageTags={() => setTagManageVisible(true)}
+          // 标签树展开状态与标题栏里的「展开 / 收起」入口（由本页统一持有）
+          expandedKeys={expandedKeys}
+          setExpandedKeys={setExpandedKeys}
+          tagExpandNode={tagExpandNode}
           topics={topics}
           setTopics={setTopics}
           selectedTopicId={selectedTopicId}
@@ -431,7 +440,8 @@ export default function CrmPage({
         />
       </div>
 
-      {crmFeatureMode === 'topics' && selectedTopic && allTopicMembers.length > 0 && (
+      {/* 侧边栏底部「人物概览」：当前主题的全部成员（含未匹配），可在 Header 的「显示设置」里关闭 */}
+      {showTopicOverview && crmFeatureMode === 'topics' && selectedTopic && allTopicMembers.length > 0 && (
         <div className="border-t border-gray-200 bg-slate-50/50 p-4 flex flex-col overflow-hidden max-h-[45%]">
           <div className="flex flex-row flex-wrap gap-2 overflow-y-auto justify-center pb-2 w-full">
             {allTopicMembers.map((member, idx) => {
@@ -529,6 +539,7 @@ export default function CrmPage({
               onManageTags={() => setTagManageVisible(true)}
               onManageTopics={() => sidebarRef.current?.openManageModal()} // 👈 通过单 ref 直接唤起主题管理
               editMode={editMode}
+              tagExpandNode={tagExpandNode}
             />
           }
           className=''

@@ -285,13 +285,16 @@ export default function CrmStatsView({ contacts, tagTree, onContactClick }) {
           <Tree
             checkable
             defaultExpandAll
+            // blockNode + min-w-0：与侧边栏标签树保持同一套标题布局
+            // （标签名过长省略号截断、人数靠右对齐，不换行也不撑破容器）
+            blockNode
             treeData={tagTree}
             checkedKeys={selectedTags}
             onCheck={(checkedKeys) => {
               // 支持多选，如果是严格受控模式也可以加 checkStrictly
               setSelectedTags(Array.isArray(checkedKeys) ? checkedKeys : checkedKeys.checked);
             }}
-            className="text-sm"
+            className="text-sm [&_.ant-tree-treenode]:min-w-0 [&_.ant-tree-node-content-wrapper]:min-w-0"
           />
         ) : (
           <div className="text-gray-400 text-xs text-center py-8">暂无标签数据</div>

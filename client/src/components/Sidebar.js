@@ -1,5 +1,5 @@
-import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Tree, Button, Tooltip, ColorPicker, Empty, Form, Input, Modal, Popconfirm, AutoComplete } from 'antd';
+import React, { useState, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
+import { Tree, Button, Tooltip, ColorPicker, Empty, Form, Input, Modal, Popconfirm, AutoComplete, Dropdown } from 'antd';
 import {
   ClearOutlined,
   SettingOutlined,
@@ -9,12 +9,119 @@ import {
   DeleteOutlined,
   EditOutlined,
   HolderOutlined,
-  PlusOutlined
+  PlusOutlined,
+  NodeExpandOutlined
 } from '@ant-design/icons';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { topicApi } from '../api/crmApi';
+
+// --- 标签树展开层级辅助 ---
+
+// 树顶端的虚拟根节点（「全部」）：展开状态里永远保留它，否则整棵树只剩这一个节点
+const VIRTUAL_ROOT_KEY = '__ALL_RECORDS__';
+
+/**
+ * 递归收集标签树的层级信息，供「展开到第 N 级」使用。
+ *
+ * 第 1 级 = processedTagTree 的顶层标签（虚拟根「全部」不计入层级）；
+ * 只有「含子节点」的标签才具备展开能力，因此只回收这些节点的 key。
+ *
+ * @returns {{ maxLevel:number, expandableByLevel:Object<number,string[]> }}
+ *   maxLevel 为整棵树的最深层级，空树为 0
+ */
+const collectExpandMeta = (nodes, level = 1, acc = { maxLevel: 0, expandableByLevel: {} }) => {
+  (nodes || []).forEach((node) => {
+    acc.maxLevel = Math.max(acc.maxLevel, level);
+    if (node.children && node.children.length > 0) {
+      acc.expandableByLevel[level] = [...(acc.expandableByLevel[level] || []), node.key];
+      collectExpandMeta(node.children, level + 1, acc);
+    }
+  });
+  return acc;
+};
+
+/**
+ * 标签树「一键展开 / 收起」控制器。
+ *
+ * 展开状态放在调用方（CrmPage）：标签标题栏在桌面端由 Sidebar 自己渲染、
+ * 小屏下由 CrmPage 的 Drawer 渲染，状态上提后两处才能共用同一份展开状态。
+ */
+export function useTagTreeExpand(processedTagTree = []) {
+  // 初始只展开虚拟根「全部」，即与改造前一样只显示第 1 级标签
+  const [expandedKeys, setExpandedKeys] = useState([VIRTUAL_ROOT_KEY]);
+
+  const expandMeta = useMemo(() => collectExpandMeta(processedTagTree), [processedTagTree]);
+
+  // 「展开全部」＝ 展开所有含子节点的标签
+  const expandAllKeys = useMemo(
+    () => [VIRTUAL_ROOT_KEY, ...Object.values(expandMeta.expandableByLevel).flat()],
+    [expandMeta]
+  );
+
+  // 「展开到第 N 级」＝ 让第 1..N 级标签可见，故需展开所有深度 < N 的可展开节点
+  const keysForLevel = (level) => {
+    const keys = [VIRTUAL_ROOT_KEY];
+    for (let depth = 1; depth < level; depth += 1) {
+      keys.push(...(expandMeta.expandableByLevel[depth] || []));
+    }
+    return keys;
+  };
+
+  // 菜单：「展开全部 / 收起全部」＋「展开到第 1 .. maxLevel-1 级」。
+  // 「展开到第 maxLevel 级」结果等价于「展开全部」，故不重复列出，
+  // 保证每个菜单项的实际效果互不相同。
+  const expandMenuItems = useMemo(() => {
+    const items = [
+      { key: 'EXPAND_ALL', label: '展开全部' },
+      { key: 'COLLAPSE_ALL', label: '收起全部' }
+    ];
+    if (expandMeta.maxLevel > 1) {
+      items.push({ type: 'divider' });
+      for (let level = 1; level < expandMeta.maxLevel; level += 1) {
+        items.push({ key: `LEVEL_${level}`, label: `展开到第 ${level} 级` });
+      }
+    }
+    return items;
+  }, [expandMeta]);
+
+  const handleExpandMenuClick = ({ key }) => {
+    if (key === 'EXPAND_ALL') {
+      setExpandedKeys(expandAllKeys);
+      return;
+    }
+    if (key === 'COLLAPSE_ALL') {
+      setExpandedKeys([]);
+      return;
+    }
+    const level = Number(String(key).replace('LEVEL_', ''));
+    if (Number.isFinite(level)) setExpandedKeys(keysForLevel(level));
+  };
+
+  return { expandedKeys, setExpandedKeys, expandMenuItems, handleExpandMenuClick };
+}
+
+/**
+ * 标签标题栏里的「展开 / 收起」入口。
+ *
+ * 尺寸压到 22×22（与主题项的编辑按钮同一约定）：标题栏最小宽度 260px，
+ * 叠加「管理标签」与两个图标按钮后，只有压到 22px 才放得下且不挤压标题。
+ */
+export function TagExpandButton({ items, onMenuClick }) {
+  return (
+    <Tooltip title="展开 / 收起">
+      <Dropdown menu={{ items, onClick: onMenuClick }} trigger={['click']} placement="bottomRight">
+        <Button
+          type="text"
+          size="small"
+          icon={<NodeExpandOutlined />}
+          className="!h-[22px] !w-[22px] !min-w-0 !p-0"
+        />
+      </Dropdown>
+    </Tooltip>
+  );
+}
 
 // --- 排序辅助组件 ---
 function SortableTopicItem({ topic, onEdit, onDelete }) {
@@ -128,8 +235,9 @@ export function SidebarTitle({ mode }) {
 }
 
 // --- 统一导出的功能操作组件 ---
-// 只读模式下，编辑类按钮（管理标签/管理主题）直接隐藏，仅保留筛选类按钮
-export function SidebarExtra({ mode, selectedTagPath, setSelectedTagPath, onManageTags, onManageTopics, editMode = true }) {
+// 只读模式下，编辑类按钮（管理标签/管理主题）直接隐藏，仅保留筛选类按钮。
+// tagExpandNode 由调用方注入（菜单项来自 useTagTreeExpand），放在最左侧
+export function SidebarExtra({ mode, selectedTagPath, setSelectedTagPath, onManageTags, onManageTopics, editMode = true, tagExpandNode }) {
   if (mode === 'topics') {
     // 只读模式下隐藏「管理主题」按钮
     if (!editMode) return null;
@@ -139,21 +247,33 @@ export function SidebarExtra({ mode, selectedTagPath, setSelectedTagPath, onMana
   }
   return (
     <div className="flex items-center gap-1 shrink-0">
+      {/* 展开 / 收起标签树（由 CrmPage 注入，保证与树共享同一份展开状态） */}
+      {tagExpandNode}
       {/* 只读模式下隐藏「管理标签」按钮 */}
       {editMode && (
         <Button icon={<SettingOutlined />} type="text" size="small" onClick={onManageTags} title="管理标签">管理标签</Button>
       )}
+      {/* 下面两个图标按钮压到 22px：标题栏最小宽度 260px，加上「管理标签」与本行的
+          展开按钮后只剩这点余量（22px 也是本文件主题项编辑按钮的既有约定） */}
       <Tooltip title={selectedTagPath === '__NO_TAGS__' ? '取消无标签筛选' : '筛选无标签人员'}>
         <Button
           type={selectedTagPath === '__NO_TAGS__' ? 'primary' : 'default'}
           size="small"
           danger={selectedTagPath === '__NO_TAGS__'}
           icon={<UserDeleteOutlined />}
+          className="!h-[22px] !w-[22px] !min-w-0 !p-0"
           onClick={() => setSelectedTagPath(selectedTagPath === '__NO_TAGS__' ? null : '__NO_TAGS__')}
         />
       </Tooltip>
       <Tooltip title="清除选择">
-        <Button type="default" size="small" icon={<ClearOutlined />} onClick={() => setSelectedTagPath(null)} disabled={!selectedTagPath} />
+        <Button
+          type="default"
+          size="small"
+          icon={<ClearOutlined />}
+          className="!h-[22px] !w-[22px] !min-w-0 !p-0"
+          onClick={() => setSelectedTagPath(null)}
+          disabled={!selectedTagPath}
+        />
       </Tooltip>
     </div>
   );
@@ -165,6 +285,8 @@ const Sidebar = forwardRef(function Sidebar({
   contacts = [],
   // 标签相关属性
   processedTagTree = [], selectedTagPath, setSelectedTagPath, onManageTags,
+  // 标签树展开状态：由 CrmPage 的 useTagTreeExpand 提供，标题栏按钮与树共用同一份状态
+  expandedKeys = [VIRTUAL_ROOT_KEY], setExpandedKeys, tagExpandNode,
   // 主题相关属性
   topics = [], setTopics, selectedTopicId, setSelectedTopicId, onSaveTopic, onDeleteTopic,
   // 编辑模式开关
@@ -256,7 +378,7 @@ const Sidebar = forwardRef(function Sidebar({
           {/* h-12（48px）：与主内容区搜索区（SearchFilter）锁定同一高度，两条 border-b 连成一条线；
               内容行 24px 居中（对齐 size="small" 按钮的 24px 高度），只读模式隐藏右侧按钮时高度不变 */}
           <SidebarTitle mode={mode} />
-          <SidebarExtra mode={mode} selectedTagPath={selectedTagPath} setSelectedTagPath={setSelectedTagPath} onManageTags={onManageTags} onManageTopics={handleOpenManage} editMode={editMode} />
+          <SidebarExtra mode={mode} selectedTagPath={selectedTagPath} setSelectedTagPath={setSelectedTagPath} onManageTags={onManageTags} onManageTopics={handleOpenManage} editMode={editMode} tagExpandNode={tagExpandNode} />
         </div>
       )}
 
@@ -298,29 +420,34 @@ const Sidebar = forwardRef(function Sidebar({
           processedTagTree.length > 0 ? (
             <Tree
               showLine={{ showLeafIcon: true }}
-              defaultExpandParent
-              className="text-sm"
+              // blockNode：让节点内容撑满整行，标题才能「左侧标签名截断 + 右侧人数对齐」。
+              // min-w-0 是必须的：节点容器是 flex 项，默认 min-width:auto（= 内容最小宽度），
+              // 标题又是 nowrap，不放开这道下限的话长标签会把行顶宽、滚动条出现而不是省略号
+              blockNode
+              className="text-sm [&_.ant-tree-treenode]:min-w-0 [&_.ant-tree-node-content-wrapper]:min-w-0"
               treeData={[
                 {
                   title: <span className="font-medium text-gray-800">全部</span>,
-                  key: '__ALL_RECORDS__', // 定义一个特殊的虚拟根 Key
+                  key: VIRTUAL_ROOT_KEY, // 定义一个特殊的虚拟根 Key
                   children: processedTagTree // 将原有的标签树整体作为它的子节点
                 }
               ]}
-              // 2. 默认展开这个新加的根节点
-              defaultExpandedKeys={['__ALL_RECORDS__']}
-              // 3. 处理高亮：如果 selectedTagPath 为空（即代表全部），则高亮这个根节点
+              // 受控展开：初始只展开虚拟根（＝只显示第 1 级标签），
+              // 之后由标题栏的「展开 / 收起」菜单与用户点击箭头共同维护
+              expandedKeys={expandedKeys}
+              onExpand={(keys) => setExpandedKeys?.(keys)}
+              // 处理高亮：如果 selectedTagPath 为空（即代表全部），则高亮这个根节点
               selectedKeys={
-                !selectedTagPath 
-                  ? ['__ALL_RECORDS__'] 
+                !selectedTagPath
+                  ? [VIRTUAL_ROOT_KEY]
                   : (selectedTagPath !== '__NO_TAGS__' ? [selectedTagPath] : [])
               }
-              // 4. 点击事件拦截处理
+              // 点击事件拦截处理
               onSelect={(keys) => {
                 if (keys.length > 0) {
                   const targetKey = keys[0];
                   // 如果点击的是最外层父节点，相当于清空筛选（即查看全部）
-                  if (targetKey === '__ALL_RECORDS__') {
+                  if (targetKey === VIRTUAL_ROOT_KEY) {
                     setSelectedTagPath(null);
                   } else {
                     setSelectedTagPath(targetKey);

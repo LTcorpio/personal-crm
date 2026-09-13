@@ -59,6 +59,16 @@ export default function App() {
     [showAvatarThumb, avatarFallbackType]
   );
 
+  // 「按主题」侧边栏底部的人物概览（当前主题的全部成员，含未匹配）默认开启；
+  // 仅在按主题模式下有意义，入口收在 Header 的「显示设置」浮窗里
+  const [showTopicOverview, setShowTopicOverviewState] = useState(
+    () => localStorage.getItem('crm_show_topic_overview') !== 'false'
+  );
+  const setShowTopicOverview = (value) => {
+    setShowTopicOverviewState(value);
+    localStorage.setItem('crm_show_topic_overview', String(value));
+  };
+
   // 浮窗里的三个弹窗入口：显隐状态由 App 持有，Header 负责触发、CrmPage 负责渲染
   const [columnSettingVisible, setColumnSettingVisible] = useState(false);
   const [cardFieldSettingVisible, setCardFieldSettingVisible] = useState(false);
@@ -99,6 +109,8 @@ export default function App() {
     avatarSyncing,
     onSyncAvatars: handleSyncAvatars,
     onOpenSequence: () => setSequenceModalVisible(true),
+    showTopicOverview,
+    setShowTopicOverview,
   };
 
   // 身份认证由反向代理层（Authelia SSO）统一完成，前端直接渲染主系统布局
@@ -145,6 +157,7 @@ export default function App() {
                     editMode={editMode}
                     setEditMode={setEditMode}
                     avatarConfig={avatarConfig}
+                    showTopicOverview={showTopicOverview}
                     refreshTick={crmRefreshTick}
                     columnSettingVisible={columnSettingVisible}
                     setColumnSettingVisible={setColumnSettingVisible}
