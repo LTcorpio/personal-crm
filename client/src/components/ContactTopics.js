@@ -6,6 +6,10 @@ import { Tooltip } from 'antd';
  *
  * 卡片 / 头像 / 列表 / 详细档案四处共用同一套样式，避免各写一份导致视觉不一致。
  * 标签颜色取自主题自身配置的颜色：底色与描边由该颜色叠加透明度派生，文字直接用该颜色。
+ *
+ * 悬浮提示：仅当该联系人在这个主题下填了成员备注时，鼠标移入标签才弹浮窗，
+ * 浮窗内容就是这条备注（备注由 buildContactTopicMap 注入为 topic.memberRemark）；
+ * 没填备注的标签不挂浮窗、移入无任何提示。
  */
 
 // 解析 #rgb / #rrggbb，失败返回 null
@@ -61,16 +65,20 @@ export default function ContactTopics({ topics = [], size = 'sm', max = 0, nowra
 
   return (
     <div className={`flex items-center ${gapClass} ${nowrap ? 'flex-nowrap overflow-hidden' : 'flex-wrap'} ${className}`}>
-      {visible.map(topic => (
-        <Tooltip key={topic.id} title={topic.name}>
+      {visible.map(topic => {
+        const remark = String(topic.memberRemark || '').trim();
+        const tagEl = (
           <span
+            key={topic.id}
             style={topicTagStyle(topic.color)}
             className={`inline-flex items-center border whitespace-nowrap min-w-0 max-w-full ${sizeClass}`}
           >
             <span className="truncate">{topic.name}</span>
           </span>
-        </Tooltip>
-      ))}
+        );
+        // 只有填了备注的成员才挂浮窗（浮窗显示备注内容）；没有备注时鼠标移入不弹任何提示
+        return remark ? <Tooltip key={topic.id} title={remark}>{tagEl}</Tooltip> : tagEl;
+      })}
       {restList.length > 0 && (
         <Tooltip title={restList.map(t => t.name).join('、')}>
           <span className={`inline-flex items-center border border-gray-200 bg-gray-50 text-gray-500 whitespace-nowrap shrink-0 ${sizeClass}`}>

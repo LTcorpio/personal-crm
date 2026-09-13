@@ -79,7 +79,9 @@ export const filterContacts = (contacts, searchTxt, searchFields, selectedTagPat
  * 按姓名自由命名的成员（未匹配到联系人）不计入；同一人在同一主题里重复出现只算一次。
  *
  * @param {Array} topics 主题列表（含 members）
- * @returns {Map<string, Array>} key 为 String(contactId)，value 为主题数组（保持主题自身顺序）
+ * @returns {Map<string, Array>} key 为 String(contactId)，value 为主题数组（保持主题自身顺序）；
+ *   数组每项是主题对象的浅拷贝，额外带 `memberRemark`＝「该成员在这个主题下的备注」（无则空串），
+ *   供主题标签的悬浮提示使用；原始 topics 对象不被改动。
  */
 export const buildContactTopicMap = (topics = []) => {
   const map = new Map();
@@ -90,7 +92,7 @@ export const buildContactTopicMap = (topics = []) => {
       if (!cid || seen.has(cid)) return;
       seen.add(cid);
       if (!map.has(cid)) map.set(cid, []);
-      map.get(cid).push(topic);
+      map.get(cid).push({ ...topic, memberRemark: String(member?.remark || '').trim() });
     });
   });
   return map;
