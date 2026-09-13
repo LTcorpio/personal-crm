@@ -3,6 +3,7 @@ import { Avatar, Dropdown, Image } from 'antd';
 import { UserOutlined, LinkOutlined, EyeOutlined, EditOutlined, PictureOutlined } from '@ant-design/icons';
 import { avatarUrl } from '../api/crmApi';
 import AvatarManagerModal from './AvatarManagerModal';
+import { immichPersonUrl } from '../utils/crmUtils';
 
 /**
  * 联系人头像。
@@ -19,6 +20,8 @@ export default function ContactAvatar({
   onOpenEdit,
   onOpenView,
   editMode = true,
+  // 详细档案里「查看人员信息」无意义（已经在详情中），传 true 可从右键菜单移除该项
+  hideViewItem = false,
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSrc, setPreviewSrc] = useState('');
@@ -82,10 +85,8 @@ export default function ContactAvatar({
     // 阻止菜单点击事件冒泡到父级，避免触发父级 onClick 打开详情/编辑弹窗
     domEvent?.stopPropagation();
     if (key === 'immich' && faceUuid) {
-      // Immich 已收归 home.lan（容器端口仅 127.0.0.1 监听），
-      // 「在 Immich 中浏览」固定走 https://photo.home.lan，不再直连 IP:2283
-      const immichUrl = `https://photo.home.lan/people/${faceUuid}`;
-      window.open(immichUrl, '_blank', 'noopener,noreferrer');
+      // URL 拼接统一走 utils/crmUtils.immichPersonUrl（详细档案的「在 Immich 查看」共用同一份口径）
+      window.open(immichPersonUrl(faceUuid), '_blank', 'noopener,noreferrer');
     } else if (key === 'preview' && thumbUrl) {
       setPreviewSrc(avatarUrl(thumbUrl));
       setPreviewOpen(true);
@@ -108,7 +109,9 @@ export default function ContactAvatar({
     if (editMode) {
       personGroup.push({ key: 'edit', label: '编辑人员信息', icon: <EditOutlined /> });
     }
-    personGroup.push({ key: 'view', label: '查看人员信息', icon: <UserOutlined /> });
+    if (!hideViewItem) {
+      personGroup.push({ key: 'view', label: '查看人员信息', icon: <UserOutlined /> });
+    }
     avatarGroup.push({ key: 'manage', label: '管理头像', icon: <PictureOutlined /> });
   }
   if (thumbUrl) {

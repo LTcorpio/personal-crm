@@ -95,3 +95,59 @@ export const buildContactTopicMap = (topics = []) => {
   });
   return map;
 };
+
+/**
+ * 按阳历生日计算周岁年龄。
+ *
+ * 兼容三种写法：YYYY-MM-DD / YYYY-MM / YYYY；缺月或缺日时按该段最早日期估算，
+ * 并返回 isIncomplete=true 供展示侧提示「大致年龄」。有 deathday 时以 deathday 为基准
+ * （即享年），否则以今天为基准。
+ *
+ * @returns {{age:number, isIncomplete:boolean}|null} 生日缺失或不可解析时返回 null
+ */
+export const calculateAge = (birthdayStr, deathdayStr) => {
+  if (!birthdayStr) return null;
+
+  const str = birthdayStr.trim();
+  let normalizedDateStr = '';
+  let isIncomplete = false;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    normalizedDateStr = str;
+  } else if (/^\d{4}-\d{2}$/.test(str)) {
+    normalizedDateStr = `${str}-01`;
+    isIncomplete = true;
+  } else if (/^\d{4}$/.test(str)) {
+    normalizedDateStr = `${str}-01-01`;
+    isIncomplete = true;
+  } else {
+    return null;
+  }
+
+  const birthDate = new Date(normalizedDateStr);
+  if (isNaN(birthDate.getTime())) return null;
+
+  const endDate = deathdayStr ? new Date(deathdayStr.trim()) : new Date();
+  if (isNaN(endDate.getTime())) return null;
+
+  let age = endDate.getFullYear() - birthDate.getFullYear();
+  const monthDiff = endDate.getMonth() - birthDate.getMonth();
+
+  // 只有完整日期才需要判断当年生日是否已过；缺失月/日时按估算处理
+  if (!isIncomplete) {
+    if (monthDiff < 0 || (monthDiff === 0 && endDate.getDate() < birthDate.getDate())) {
+      age--;
+    }
+  }
+
+  return { age, isIncomplete };
+};
+
+/**
+ * Immich 人物页地址（face_uuid → 外链）。
+ *
+ * Immich 已收归 home.lan（容器端口仅 127.0.0.1 监听），统一固定走 https://photo.home.lan，
+ * 不再直连 IP:2283。头像右键菜单与详细档案的「在 Immich 查看」共用同一份拼接逻辑。
+ */
+export const IMMICH_BASE_URL = 'https://photo.home.lan';
+export const immichPersonUrl = (faceUuid) => `${IMMICH_BASE_URL}/people/${faceUuid}`;

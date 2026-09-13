@@ -4,6 +4,7 @@ import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import ColumnSetting, { DEFAULT_COLUMNS } from '../components/ColumnSetting';
 import CardFieldSetting, { resolveCardFields } from '../components/CardFieldSetting';
 import ContactCard from '../components/ContactCard';
+import ContactDetail from '../components/ContactDetail';
 import ContactMiniCard from '../components/ContactMiniCard';
 import ContactForm from '../components/ContactForm';
 import ContactListTable from '../components/ContactListTable';
@@ -668,7 +669,13 @@ export default function CrmPage({
       <Modal
         title={
           <div className="flex items-center justify-between pr-6">
-            <span>联系人详细档案</span>
+            <span className="flex items-center gap-2 min-w-0">
+              <span>联系人详细档案</span>
+              {/* 当前联系人的姓名：次要样式跟在标题后，方便确认正在看谁 */}
+              {detailContact?.name && (
+                <span className="text-gray-400 font-normal truncate">· {detailContact.name}</span>
+              )}
+            </span>
             {detailContact?.id && (
               <Tag color="default" className="font-mono text-gray-400 border-gray-200 m-0">
                 ID: {detailContact.id}
@@ -679,26 +686,24 @@ export default function CrmPage({
         open={!!detailContact}
         onCancel={() => setDetailContact(null)}
         footer={null}
-        width={720}
-        className=''
+        width={800}
+        styles={{
+          container: { padding: 0 },
+          // 标题与正文的间距改由 header 的下内边距提供：这样即使正文滚动，间距也恒定存在
+          header: { padding: '20px 24px 20px', marginBottom: 0 },
+          body: { padding: 0 },
+        }}
       >
+        {/* container 的内边距已归零，改由本滚动层自带留白：自绘悬浮滚动条的轨道是贴「滚动容器」
+            右缘内缩 3px 摆放的，这样它既贴着弹窗边界，又落在留白上而不是压住内容 */}
         {detailContact && (
-          <div className="pt-4">
-            <ContactCard
+          <div className="px-6 pb-6" style={{ maxHeight: '68vh', overflowY: 'auto' }}>
+            <ContactDetail
               contact={detailContact}
-              onClick={() => {
-                if (!editMode) return; // 只读模式下不允许从详情视图跳转到编辑弹窗
-                const currentContact = detailContact;
-                setDetailContact(null);
-                setEditingContact(currentContact);
-                setFormVisible(true);
-              }}
-              onRelatedClick={handleRelatedClick}
-              noBorder={true}
               avatarConfig={avatarConfig}
               onAvatarChange={fetchData}
-              onOpenEdit={() => { if (!editMode) return; setDetailContact(null); handleOpenEdit(detailContact); }}
-              onOpenView={() => setDetailContact(detailContact)}
+              onRelatedClick={handleRelatedClick}
+              onEdit={() => { setDetailContact(null); handleOpenEdit(detailContact); }}
               editMode={editMode}
               topicsByContactId={topicsByContactId}
             />

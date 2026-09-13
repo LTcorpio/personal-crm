@@ -1,9 +1,11 @@
-import React from 'react';
-import { Card, Tag, Tooltip, Collapse } from 'antd';
-import { PhoneOutlined, MailOutlined, EnvironmentOutlined, IdcardOutlined, WechatOutlined, QqOutlined, TikTokOutlined, QuestionCircleOutlined, CommentOutlined, RightOutlined } from '@ant-design/icons';
+import React, { useState } from 'react';
+import { Card, Tag, Tooltip, Tabs } from 'antd';
+import { PhoneOutlined, MailOutlined, EnvironmentOutlined, IdcardOutlined, WechatOutlined, QqOutlined, TikTokOutlined, QuestionCircleOutlined, RightOutlined } from '@ant-design/icons';
 import Markdown from 'react-markdown';
 import ContactAvatar from './ContactAvatar';
 import ContactTopics from './ContactTopics';
+import RelatedContactList from './RelatedContactList';
+import { calculateAge } from '../utils/crmUtils';
 
 export default function ContactCard({ contact, onClick, noBorder = false, onRelatedClick, avatarConfig, onAvatarChange, onOpenEdit, onOpenView, editMode = true, topicsByContactId, cardFields }) {
   // 该联系人所属的主题：卡片视图并入标签行展示，详细档案（noBorder）里另起独立区块
@@ -13,56 +15,22 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
   // 详细档案（noBorder）不受该配置影响，始终展示全部信息。
   const fieldOn = (key) => noBorder || !cardFields || cardFields[key] !== false;
 
+  // 卡片体积紧凑：「扩展信息 / 备注」页签默认不展开，点击对应页签才显示内容，
+  // 再次点击当前页签则收起（activeKey 传 null 时 antd 会给所有面板加 -hidden，容器高度随之塌缩），
+  // 避免长 Markdown 把卡片撑高。
+  const [activeExtraTab, setActiveExtraTab] = useState(null);
+
+  // 收起态（activeKey === null）必须把指示条一并隐藏：
+  // rc-tabs 的 useIndicator 用「新样式是否与旧样式完全相等」来决定是否 setState，
+  // 而无选中页时的 newInkStyle 是空对象，Object.keys({}).every(...) 恒为 true，
+  // 于是被判为「没变化」→ 指示条保留上一次的位置与宽度，页签都收起了下面还留一条蓝线。
+  // 这里在无激活页时直接 display:none（!hidden 覆盖 antd 的 cssinjs 样式）。
+  const inkBarClass = activeExtraTab === null ? '[&_.ant-tabs-ink-bar]:!hidden' : '';
+
   // 从全路径标签中提取叶子节点的简写用于展示
   const getLeafTagName = (path) => path.split('/').pop();
 
-  // 根据阳历生日计算周岁年龄的函数
-  const calculateAge = (birthdayStr, deathdayStr) => {
-    if (!birthdayStr) return null;
-
-    const str = birthdayStr.trim();
-    let normalizedDateStr = '';
-    let isIncomplete = false;
-
-    // 正则匹配三种可能的格式
-    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-      // 完整格式 YYYY-MM-DD
-      normalizedDateStr = str;
-      isIncomplete = false;
-    } else if (/^\d{4}-\d{2}$/.test(str)) {
-      // 缺失日 YYYY-MM
-      normalizedDateStr = `${str}-01`;
-      isIncomplete = true;
-    } else if (/^\d{4}$/.test(str)) {
-      // 缺失月日 YYYY
-      normalizedDateStr = `${str}-01-01`;
-      isIncomplete = true;
-    } else {
-      // 格式不匹配，不予计算
-      return null;
-    }
-
-    const birthDate = new Date(normalizedDateStr);
-    // 确保日期转换合法
-    if (isNaN(birthDate.getTime())) return null;
-
-    // 如果有死亡日期，则以死亡日期为基准计算，否则以今天为基准
-    const endDate = deathdayStr ? new Date(deathdayStr.trim()) : new Date();
-    if (isNaN(endDate.getTime())) return null;
-
-    let age = endDate.getFullYear() - birthDate.getFullYear();
-    const monthDiff = endDate.getMonth() - birthDate.getMonth();
-    
-    // 如果是完整日期，需要精准判断是否过了生日
-    if (!isIncomplete) {
-      if (monthDiff < 0 || (monthDiff === 0 && endDate.getDate() < birthDate.getDate())) {
-        age--;
-      }
-    }
-    
-    return { age, isIncomplete }
-  };
-
+  // 年龄计算统一走 utils/crmUtils.calculateAge（详细档案组件复用同一份口径）
   const ageInfo = calculateAge(contact.birthday_solar, contact.deathday);
 
   return (
@@ -262,66 +230,29 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
           </div>
         )}
 
-        {/* 关联人脉：可整体隐藏 */}
+        {/* 关联人脉：可整体隐藏；chip 样式与详细档案共用 RelatedContactList（卡片取小一档） */}
         {fieldOn('related') && contact.related?.length > 0 && (
           <div className="mt-3">
             <span className="text-xs font-bold text-gray-400 block mb-1.5">关联人</span>
-            <div className="flex flex-wrap gap-x-2 gap-y-2">
-              {contact.related.map((r, idx) => {
-                // 判断是否有关联备注（排除空字符串、undefined或null）
-                const hasRemark = r.remark && r.remark.trim() !== '';
-                const hasId = !!r.id; // 判断是否有绑定的 ID
-
-                const tagContent = (
-                  <Tag 
-                    className="text-[11px] border-none p-0 overflow-hidden inline-flex items-center rounded m-0 h-auto shadow-sm"
-                    onClick={(e) => {
-                      if (hasId && onRelatedClick) {
-                        e.stopPropagation(); // 阻止冒泡，避免触发卡片整体的点击事件
-                        onRelatedClick(r.id);
-                      }
-                    }}
-                  >
-                    <span className="bg-gray-100 text-gray-600 px-1.5 py-0.4 font-medium border-r border-gray-200">
-                      {r.relation}
-                    </span>
-                    <span className={`px-2 py-0.4 flex items-center gap-1 ${
-                      hasId 
-                        ? 'bg-blue-50 text-blue-600' // 有 ID 时高亮为蓝色
-                        : 'bg-gray-50 text-gray-500' // 没有 ID 时保持低调的灰色
-                    }`}>
-                      {r.name}
-                      {/* 如果有备注，显示图标 */}
-                      {hasRemark && <CommentOutlined />}
-                    </span>
-                  </Tag>
-                );
-
-                // 如果有备注，包裹 Tooltip；否则直接返回 Tag
-                return hasRemark ? (
-                  <Tooltip title={r.remark} key={idx}>
-                    {tagContent}
-                  </Tooltip>
-                ) : (
-                  <div key={idx}>{tagContent}</div>
-                );
-              })}
-            </div>
+            <RelatedContactList
+              related={contact.related}
+              onRelatedClick={onRelatedClick}
+              size="sm"
+            />
           </div>
         )}
 
-        {/* 扩展 Markdown 块与备注：可整体隐藏 */}
+        {/* 扩展信息 / 备注：改用页签（与详细档案形态一致），只有一项也保留页签；可整体隐藏 */}
         {fieldOn('extra') && (contact.extra || contact.remark) && (
-          <Collapse
-            size='small' bordered={false}
-            defaultActiveKey={noBorder ? ['1', '2'] : []}
-            className='text-xs'
-            classNames={{
-              title: 'self-center'
-            }}
+          <Tabs
+            size="small"
+            className={`[&_.ant-tabs-tab]:!text-xs [&_.ant-tabs-nav]:!mb-2 ${inkBarClass}`}
+            activeKey={activeExtraTab}
+            onTabClick={(key) => setActiveExtraTab((prev) => (prev === key ? null : key))}
+            destroyOnHidden
             items={[
               contact.extra && {
-                key: '1',
+                key: 'extra',
                 label: '扩展信息',
                 children: (
                   <div className="prose prose-sm max-w-none text-sm">
@@ -330,7 +261,7 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
                 )
               },
               contact.remark && {
-                key: '2',
+                key: 'remark',
                 label: '备注',
                 children: (
                   <div className="prose prose-sm max-w-none text-sm">

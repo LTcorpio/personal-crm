@@ -45,7 +45,7 @@ export const topicTagStyle = (color) => {
   };
 };
 
-export default function ContactTopics({ topics = [], size = 'sm', max = 0, nowrap = false, className = '' }) {
+export default function ContactTopics({ topics = [], size = 'sm', max = 0, nowrap = false, className = '', gapClass = 'gap-1' }) {
   const list = topics || [];
   if (list.length === 0) return null;
 
@@ -55,10 +55,12 @@ export default function ContactTopics({ topics = [], size = 'sm', max = 0, nowra
 
   const sizeClass = size === 'xs'
     ? 'text-[10px] leading-4 px-1.5 rounded'
-    : 'text-xs px-2 py-0.5 rounded-md';
+    : size === 'md'
+      ? 'text-sm px-2.5 py-0.5 rounded-md'
+      : 'text-xs px-2 py-0.5 rounded-md';
 
   return (
-    <div className={`flex items-center gap-1 ${nowrap ? 'flex-nowrap overflow-hidden' : 'flex-wrap'} ${className}`}>
+    <div className={`flex items-center ${gapClass} ${nowrap ? 'flex-nowrap overflow-hidden' : 'flex-wrap'} ${className}`}>
       {visible.map(topic => (
         <Tooltip key={topic.id} title={topic.name}>
           <span
