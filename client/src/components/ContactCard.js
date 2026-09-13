@@ -3,8 +3,16 @@ import { Card, Tag, Tooltip, Collapse } from 'antd';
 import { PhoneOutlined, MailOutlined, EnvironmentOutlined, IdcardOutlined, WechatOutlined, QqOutlined, TikTokOutlined, QuestionCircleOutlined, CommentOutlined, RightOutlined } from '@ant-design/icons';
 import Markdown from 'react-markdown';
 import ContactAvatar from './ContactAvatar';
+import ContactTopics from './ContactTopics';
 
-export default function ContactCard({ contact, onClick, noBorder = false, onRelatedClick, avatarConfig, onAvatarChange, onOpenEdit, onOpenView, editMode = true }) {
+export default function ContactCard({ contact, onClick, noBorder = false, onRelatedClick, avatarConfig, onAvatarChange, onOpenEdit, onOpenView, editMode = true, topicsByContactId, cardFields }) {
+  // 该联系人所属的主题：卡片视图并入标签行展示，详细档案（noBorder）里另起独立区块
+  const contactTopics = topicsByContactId?.get(String(contact.id)) || [];
+
+  // 卡片显示字段：按「信息组」整体开关（配置入口在 Header 的「显示设置」浮窗）。
+  // 详细档案（noBorder）不受该配置影响，始终展示全部信息。
+  const fieldOn = (key) => noBorder || !cardFields || cardFields[key] !== false;
+
   // 从全路径标签中提取叶子节点的简写用于展示
   const getLeafTagName = (path) => path.split('/').pop();
 
@@ -65,12 +73,14 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
         body: noBorder ? { padding: 0 } : undefined
       }}
     >
+      {/* 头像区域 / 所属主题任一可见时才渲染该行 */}
+      {(fieldOn('header') || (!noBorder && fieldOn('topics'))) && (
       <div
         className="flex items-start gap-4 mb-4 cursor-pointer"
         onClick={onClick}
       >
-        {/* 头像区域 */}
-        <ContactAvatar 
+        {/* 头像区域：可整体隐藏 */}
+        {fieldOn('header') && <ContactAvatar 
           faceUuid={contact.face_uuid} 
           thumbUrl={contact.face_thumb_url}
           name={contact.name} 
@@ -84,10 +94,11 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
           sizeClass="w-16 h-16"
           textClass="text-[28px]"
           iconClass="text-2xl"
-        />
+        />}
 
-        {/* 基本姓名与基本标签 */}
+        {/* 基本姓名与基本标签：可整体隐藏 */}
         <div className="flex-1 min-w-0">
+          {fieldOn('header') && <>
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-xl font-bold text-gray-800 truncate m-0">{contact.name}</h3>
             {contact.title && <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{contact.title}</span>}
@@ -135,17 +146,24 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
               )
             ))}
           </div>
+          </>}
+          {/* 卡片视图：所属主题在标签行下方独占一行（w-full），作为独立信息组可单独隐藏；
+              详细档案里另起带标题的独立区块，此处不渲染，避免重复展示 */}
+          {!noBorder && fieldOn('topics') && <ContactTopics topics={contactTopics} className="w-full mt-1" />}
         </div>
       </div>
+      )}
 
       {/* 核心基础信息 */}
       <div className="space-y-2 text-sm text-gray-600 flex-1">
-        {contact.location && (
+        {fieldOn('address') && contact.location && (
           <div className="flex items-start gap-2">
             <EnvironmentOutlined className="text-gray-400 mt-1 flex-shrink-0" />
             <span className="break-all">{contact.location}{contact.address}</span>
           </div>
         )}
+        {/* 生日 / 民族 / 籍贯：可整体隐藏 */}
+        {fieldOn('profile') && (
         <div className="flex flex-col gap-1 text-xs border-t border-b border-gray-50 py-2 my-2">
           {(contact.birthday_solar || contact.birthday_lunar) && (
             <div className="flex items-start gap-2">
@@ -180,9 +198,10 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
             </div>
           )}
         </div>
+        )}
 
-        {/* 联系方式 */}
-        {(contact.id_card || (contact.contact && Object.values(contact.contact).some(val => val))) && (
+        {/* 身份证 / 联系方式：可整体隐藏 */}
+        {(fieldOn('contact') && (contact.id_card || (contact.contact && Object.values(contact.contact).some(val => val)))) && (
           <div className="flex flex-col gap-1.5 bg-gray-50 p-2 rounded-lg text-xs font-mono">
             {contact.id_card && (
               <div className="flex items-start gap-2">
@@ -235,8 +254,16 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
           </div>
         )}
 
-        {/* 关联人脉 */}
-        {contact.related?.length > 0 && (
+        {/* 所属主题：仅详细档案里单独成块（卡片视图已在标签行展示，不重复） */}
+        {noBorder && contactTopics.length > 0 && (
+          <div className="mt-3">
+            <span className="text-xs font-bold text-gray-400 block mb-1.5">所属主题</span>
+            <ContactTopics topics={contactTopics} />
+          </div>
+        )}
+
+        {/* 关联人脉：可整体隐藏 */}
+        {fieldOn('related') && contact.related?.length > 0 && (
           <div className="mt-3">
             <span className="text-xs font-bold text-gray-400 block mb-1.5">关联人</span>
             <div className="flex flex-wrap gap-x-2 gap-y-2">
@@ -283,8 +310,8 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
           </div>
         )}
 
-        {/* 扩展 Markdown 块与备注 */}
-        {(contact.extra || contact.remark) && (
+        {/* 扩展 Markdown 块与备注：可整体隐藏 */}
+        {fieldOn('extra') && (contact.extra || contact.remark) && (
           <Collapse
             size='small' bordered={false}
             defaultActiveKey={noBorder ? ['1', '2'] : []}

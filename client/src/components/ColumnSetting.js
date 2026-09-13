@@ -19,6 +19,8 @@ export const DEFAULT_COLUMNS = [
   { id: '9', title: '地区', dataIndex: 'location', key: 'location', visible: true },
   { id: '10', title: '身份证', dataIndex: 'id_card', key: 'id_card', visible: false },
   { id: '11', title: '标签', dataIndex: 'tag', key: 'tag', visible: false },
+  // 所属主题：数据不在联系人记录上，由 ContactListTable 通过主题成员映射动态渲染
+  { id: '13', title: '主题', dataIndex: 'topic', key: 'topic', visible: true },
   { id: '12', title: '详细住址', dataIndex: 'address', key: 'address', visible: false },
 ];
 

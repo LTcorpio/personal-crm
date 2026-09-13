@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Checkbox, Radio, Flex, Tooltip, Button } from 'antd';
-import { OrderedListOutlined, TableOutlined, UserOutlined, CloudDownloadOutlined } from '@ant-design/icons';
+import { message, Spin, Empty, Tag, Modal, Layout, FloatButton, Drawer, Tooltip } from 'antd';
 import ColumnSetting, { DEFAULT_COLUMNS } from '../components/ColumnSetting';
+import CardFieldSetting, { resolveCardFields } from '../components/CardFieldSetting';
 import ContactCard from '../components/ContactCard';
 import ContactMiniCard from '../components/ContactMiniCard';
 import ContactForm from '../components/ContactForm';
@@ -13,16 +13,28 @@ import SearchFilter from '../components/SearchFilter';
 import CrmStatsView from '../views/CrmStatsView';
 import CrmBottomBar from '../components/CrmBottomBar';
 
-import { filterContacts, enrichTreeWithCounts } from '../utils/crmUtils';
+import { filterContacts, enrichTreeWithCounts, buildContactTopicMap } from '../utils/crmUtils';
 import { useResizableSider } from '../hooks/useResizableSider';
 import { contactApi, tagApi, topicApi } from '../api/crmApi';
 
 const { Content, Sider } = Layout;
 
-export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVisible, setFormVisible, editingContact, setEditingContact, editMode = true, setEditMode }) {
+export default function CrmPage({
+  viewMode, setViewMode, crmFeatureMode,
+  formVisible, setFormVisible, editingContact, setEditingContact,
+  editMode = true, setEditMode,
+  // 显示类配置：由 App 持有、Header 的「显示设置」浮窗控制，这里只负责消费与渲染
+  avatarConfig,
+  refreshTick = 0,
+  columnSettingVisible, setColumnSettingVisible,
+  cardFieldSettingVisible, setCardFieldSettingVisible,
+  sequenceModalVisible, setSequenceModalVisible,
+}) {
   const [contacts, setContacts] = useState([]);
   const [tagTree, setTagTree] = useState([]);
   const [topics, setTopics] = useState([]);
+  // 联系人 ID → 所属主题数组，供卡片 / 列表 / 详细档案展示（头像视图不展示主题）
+  const topicsByContactId = useMemo(() => buildContactTopicMap(topics), [topics]);
   // 持久化选中的主题/标签，刷新后恢复
   const [selectedTopicId, setSelectedTopicId] = useState(() => {
     const saved = localStorage.getItem('crm_selected_topic_id');
@@ -33,7 +45,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   const [selectedTagPath, setSelectedTagPath] = useState(() => {
     return localStorage.getItem('crm_selected_tag_path') || null;
   });
-  const [sequenceModalVisible, setSequenceModalVisible] = useState(false);
+  // 人员序列弹窗的显隐由上层（Header 的「显示设置」浮窗）控制，本组件只负责渲染
   const [tagManageVisible, setTagManageVisible] = useState(false);
   const sidebarRef = useRef(null);
   const gridRef = useRef(null);
@@ -76,24 +88,32 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   // 网格视图每行列数（由 ResizeObserver 实时测量），0 表示尚未测量
   const [columnsPerRow, setColumnsPerRow] = useState(0);
 
-  // 头像显示模式
-  const [showAvatarThumb, setShowAvatarThumb] = useState(() => {
-    const saved = localStorage.getItem('crm_show_avatar_thumb');
-    return saved !== 'false';
-  });
-  const [avatarFallbackType, setAvatarFallbackType] = useState(() => {
-    return localStorage.getItem('crm_avatar_fallback_type') || 'default';
-  });
-  const [avatarDrawerVisible, setAvatarDrawerVisible] = useState(false);
-  const [avatarSyncing, setAvatarSyncing] = useState(false);
-  const avatarConfig = useMemo(() => ({ showAvatarThumb, avatarFallbackType }), [showAvatarThumb, avatarFallbackType]);
-  
+  // 头像展示配置（avatarConfig）已上提到 App，由 Header 的「显示设置」浮窗统一维护
+
   // 列表模式下的列设置
   const [columnConfigs, setColumnConfigs] = useState(() => {
     const saved = localStorage.getItem('crm_column_configs');
-    return saved ? JSON.parse(saved) : DEFAULT_COLUMNS;
+    if (!saved) return DEFAULT_COLUMNS;
+    try {
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return DEFAULT_COLUMNS;
+      // 兼容旧配置：把新增的默认列（如「主题」）补到末尾，用户既有的显隐与排序保持不变
+      const missing = DEFAULT_COLUMNS.filter(def => !parsed.some(col => col.key === def.key));
+      return missing.length ? [...parsed, ...missing] : parsed;
+    } catch (err) {
+      return DEFAULT_COLUMNS;
+    }
   });
-  const [settingVisible, setSettingVisible] = useState(false);
+  // 卡片模式下的「显示字段」配置：按信息组整体开关，默认全显
+  const [cardFields, setCardFields] = useState(() => {
+    try {
+      return resolveCardFields(JSON.parse(localStorage.getItem('crm_card_fields') || 'null'));
+    } catch (err) {
+      return resolveCardFields(null);
+    }
+  });
+
+  // 列设置 / 卡片显示字段两个弹窗的显隐由上层（Header 的「显示设置」浮窗）控制
 
   // 侧边栏宽度
   const { siderWidth, handleMouseDown } = useResizableSider(260, 260, 600);
@@ -162,6 +182,11 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
     localStorage.setItem('crm_column_configs', JSON.stringify(newConfigs));
   };
 
+  const handleCardFieldsChange = (nextFields) => {
+    setCardFields(nextFields);
+    localStorage.setItem('crm_card_fields', JSON.stringify(nextFields));
+  };
+
   const handleSearchFieldsChange = useCallback((newFields) => {
     setSearchFields(newFields);
     localStorage.setItem('crm_search_fields', JSON.stringify(newFields));
@@ -186,6 +211,11 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // 外部动作（如「补齐缺失头像」）完成后，通过 refreshTick 触发一次重新拉取
+  useEffect(() => {
+    if (refreshTick > 0) fetchData();
+  }, [refreshTick, fetchData]);
 
   useEffect(() => {
     if (crmFeatureMode !== 'topics') return;
@@ -238,25 +268,8 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
     }
   };
 
-  // 手动补齐缺失头像：把已绑定 Immich UUID 但本地还没图的联系人拉到本地。
-  // 平时由后端在启动时自动执行，这里只是兜底入口。
-  const handleSyncAvatars = async () => {
-    setAvatarSyncing(true);
-    try {
-      const res = await contactApi.syncAvatars();
-      const r = res.data?.result || {};
-      if (r.failed > 0) {
-        message.warning(`${res.data?.message}（成功 ${r.fetched} 位，失败 ${r.failed} 位）`);
-      } else {
-        message.success(res.data?.message || '头像同步完成');
-      }
-      fetchData();
-    } catch (err) {
-      message.error('头像同步失败，请检查 Immich 服务是否可达');
-    } finally {
-      setAvatarSyncing(false);
-    }
-  };
+  // 「补齐缺失头像」已迁入 Header 的「显示设置」浮窗，动作在 App 中执行，
+  // 完成后通过 refreshTick 通知本组件重新拉取数据。
 
   const handleSaveTopic = async (topicId, data) => {
     try {
@@ -530,6 +543,8 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                         onOpenEdit={() => handleOpenEdit(item)}
                         onOpenView={() => setDetailContact(item)}
                         editMode={editMode}
+                        topicsByContactId={topicsByContactId}
+                        cardFields={cardFields}
                       />
                     ))}
                   </div>
@@ -562,6 +577,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
                     editMode={editMode}
                     onAvatarChange={fetchData}
                   onOpenEdit={handleOpenEdit}
+                  topicsByContactId={topicsByContactId}
                   />
                 )}
                 <div className="text-center text-gray-400 text-xs mt-8 pb-4 tracking-wide">
@@ -617,11 +633,18 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         // 头像在弹窗内即时落库，这里同步刷新列表与当前编辑对象
         onAvatarChange={fetchData}
       />
+      {/* 列设置 / 卡片显示字段：入口都在 Header 的「显示设置」浮窗，这里只负责渲染弹窗 */}
       <ColumnSetting
-        visible={settingVisible}
+        visible={columnSettingVisible}
         columns={columnConfigs}
-        onClose={() => setSettingVisible(false)}
+        onClose={() => setColumnSettingVisible(false)}
         onSave={handleColumnConfigsChange}
+      />
+      <CardFieldSetting
+        visible={cardFieldSettingVisible}
+        fields={cardFields}
+        onClose={() => setCardFieldSettingVisible(false)}
+        onSave={handleCardFieldsChange}
       />
       <Modal
         title={
@@ -658,6 +681,7 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
               onOpenEdit={() => { if (!editMode) return; setDetailContact(null); handleOpenEdit(detailContact); }}
               onOpenView={() => setDetailContact(detailContact)}
               editMode={editMode}
+              topicsByContactId={topicsByContactId}
             />
           </div>
         )}
@@ -676,55 +700,11 @@ export default function CrmPage({ viewMode, setViewMode, crmFeatureMode, formVis
         tagTree={tagTree}
       />
 
+      {/* 右下角仅保留「回到顶部」：列设置 / 人员序列 / 头像展示等显示类功能
+          已全部收纳进 Header 的「显示设置」浮窗 */}
       <FloatButton.Group>
-        {/* 回到顶部 */}
         <FloatButton.BackTop duration={300} visibilityHeight={150} target={() => document.getElementById('crm-content') || window} style={{ position: 'static' }} />
-        {/* 当处于列表视图时，显示列设置悬浮按钮 */}
-        {viewMode === 'list' && (
-          <FloatButton icon={<TableOutlined />} tooltip="列设置" onClick={() => setSettingVisible(true)} />
-        )}
-        {/* 人物序列调整 */}
-        {crmFeatureMode === 'tags' && <FloatButton 
-          icon={<OrderedListOutlined />} 
-          tooltip="管理人员序列" 
-          onClick={() => setSequenceModalVisible(true)} 
-        />}
-        {/* 头像展示设置 */}
-        {(crmFeatureMode === 'tags' || crmFeatureMode === 'topics') && <FloatButton icon={<UserOutlined />} tooltip="头像展示设置" onClick={() => setAvatarDrawerVisible(true)} />}
       </FloatButton.Group>
-
-      <Drawer title="头像展示全局配置" placement="bottom" height={280} onClose={() => setAvatarDrawerVisible(false)} open={avatarDrawerVisible} destroyOnHidden>
-        <div className="max-w-md mx-auto">
-          <Flex vertical gap="middle">
-            <Flex align="center" justify="space-between" className="py-1">
-              <span className="font-medium text-gray-800">头像缩略图</span>
-              <Checkbox checked={showAvatarThumb} onChange={(e) => { setShowAvatarThumb(e.target.checked); localStorage.setItem('crm_show_avatar_thumb', String(e.target.checked)); }}>
-                显示真实头像
-              </Checkbox>
-            </Flex>
-            <Flex align="center" justify="space-between" className="py-1">
-              <span className="font-medium text-gray-800">未渲染时兜底</span>
-              <Radio.Group value={avatarFallbackType} buttonStyle="solid" optionType="button" onChange={(e) => { setAvatarFallbackType(e.target.value); localStorage.setItem('crm_avatar_fallback_type', e.target.value); }}>
-                <Radio value="default">默认占位</Radio>
-                <Radio value="lastname">姓氏</Radio>
-                <Radio value="fullname">全名</Radio>
-              </Radio.Group>
-            </Flex>
-            {/* 头像已本地化：展示只读本地文件，Immich 只在补全缺失头像时被访问 */}
-            <Flex align="center" justify="space-between" className="py-1 border-t border-gray-100 pt-3">
-              <span className="font-medium text-gray-800">
-                补齐缺失头像
-                <div className="text-xs text-gray-400 font-normal mt-0.5">
-                  把「已绑定 Immich UUID 但本地还没有图」的联系人拉取到本地
-                </div>
-              </span>
-              <Button size="small" icon={<CloudDownloadOutlined />} loading={avatarSyncing} onClick={handleSyncAvatars}>
-                同步全部头像
-              </Button>
-            </Flex>
-          </Flex>
-        </div>
-      </Drawer>
     </>
   );
 }

@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Button, Drawer, Segmented, Divider, Menu, Tooltip } from 'antd';
+import { Button, Drawer, Segmented, Divider, Menu, Tooltip, Popover } from 'antd';
 import {
   PlusOutlined,
-  AppstoreOutlined,
-  BarsOutlined,
-  HarmonyOSOutlined,
   TagsOutlined,
   BarChartOutlined,
   ApartmentOutlined,
@@ -13,10 +10,13 @@ import {
   ToolOutlined,
   EditOutlined,
   EyeOutlined,
-  TableOutlined
+  TableOutlined,
+  SlidersOutlined,
+  ControlOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import DisplaySettingsPanel from './DisplaySettingsPanel';
 
 // 品牌 LOGO：渐变圆角方块 + 人脉网络节点，寓意「个人人脉管理」
 function BrandLogo({ size = 40 }) {
@@ -58,7 +58,7 @@ function BrandLogo({ size = 40 }) {
   );
 }
 
-export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFeatureMode, editMode = true, onToggleEditMode, onAddContact }) {
+export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = true, onToggleEditMode, onAddContact, displaySettings }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -112,12 +112,7 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
     { value: 'stats', label: (<span className="w-full justify-center flex items-center gap-1.5"><BarChartOutlined />统计</span>) },
   ];
 
-  // 视图布局 Segmented 选项
-  const viewModeOptions = [
-    { value: 'card', icon: <AppstoreOutlined /> },
-    { value: 'mini', icon: <HarmonyOSOutlined /> },
-    { value: 'list', icon: <BarsOutlined /> },
-  ];
+  // 视图布局选项已迁入「显示设置」浮窗（DisplaySettingsPanel），此处不再定义
 
   return (
     <header className="bg-gray-50 shadow-sm border-b border-gray-200 sticky top-0 z-40 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between relative">
@@ -177,14 +172,18 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
               </Button>
             )}
 
-            {/* 桌面端视图切换：中屏及以上显示 */}
-            <div className="hidden lg:block">
-              <Segmented
-                options={viewModeOptions}
-                value={viewMode}
-                onChange={e => setViewMode(e)}
-              />
-            </div>
+            {/* 显示设置：把显示模式、字段显示、头像展示等显示类功能统一收纳进浮窗，
+                替代原先独立摆放的「显示模式切换器」（桌面端与移动端共用同一个入口） */}
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              arrow={false}
+              content={<DisplaySettingsPanel crmFeatureMode={crmFeatureMode} {...displaySettings} />}
+            >
+              <Tooltip title="显示设置">
+                <Button shape="circle" icon={<ControlOutlined />} />
+              </Tooltip>
+            </Popover>
 
             {/* 编辑/只读模式切换：圆形按钮，以颜色区分当前状态 */}
             {/* 编辑模式 = 蓝色（活跃），只读模式 = 绿色（安全浏览） */}
@@ -271,24 +270,7 @@ export default function Header({ viewMode, setViewMode, crmFeatureMode, setCrmFe
             </div>
           )}
 
-          {isCrmPage && crmFeatureMode !== 'stats' && <Divider className="my-1 border-gray-100" />}
-
-          {/* 模块3：人脉平铺样式的切换 */}
-          {isCrmPage && crmFeatureMode !== 'stats' && (
-            <div>
-              <div className="text-xs font-semibold text-gray-400 mb-2 tracking-wider">视图布局</div>
-              <Segmented
-                block
-                options={[
-                  { value: 'card', icon: <AppstoreOutlined />, label: '卡片' },
-                  { value: 'mini', icon: <HarmonyOSOutlined />, label: '头像' },
-                  { value: 'list', icon: <BarsOutlined />, label: '列表' },
-                ]}
-                value={viewMode}
-                onChange={e => setViewMode(e)}
-              />
-            </div>
-          )}
+          {/* 模块3：视图布局切换已迁入 Header 的「显示设置」浮窗，抽屉内不再重复，避免两处入口 */}
 
           {/* 模块3.5：编辑模式开关 */}
           {isCrmPage && crmFeatureMode !== 'stats' && onToggleEditMode && (

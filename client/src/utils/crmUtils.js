@@ -71,3 +71,27 @@ export const filterContacts = (contacts, searchTxt, searchFields, selectedTagPat
     return matchesSearch && matchesTag;
   });
 };
+
+/**
+ * 建立「联系人 ID → 所属主题数组」的映射，供各视图展示某人属于哪些主题。
+ *
+ * 口径与 CrmPage 里「按主题」筛选成员保持一致：只认成员显式绑定的 contactId，
+ * 按姓名自由命名的成员（未匹配到联系人）不计入；同一人在同一主题里重复出现只算一次。
+ *
+ * @param {Array} topics 主题列表（含 members）
+ * @returns {Map<string, Array>} key 为 String(contactId)，value 为主题数组（保持主题自身顺序）
+ */
+export const buildContactTopicMap = (topics = []) => {
+  const map = new Map();
+  (topics || []).forEach(topic => {
+    const seen = new Set();
+    (topic?.members || []).forEach(member => {
+      const cid = member?.contactId ? String(member.contactId) : '';
+      if (!cid || seen.has(cid)) return;
+      seen.add(cid);
+      if (!map.has(cid)) map.set(cid, []);
+      map.get(cid).push(topic);
+    });
+  });
+  return map;
+};

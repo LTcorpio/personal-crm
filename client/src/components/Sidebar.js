@@ -112,15 +112,16 @@ function SortableMemberItem({ field, remove, contacts, form }) {
 
 // --- 统一导出的标题组件 ---
 export function SidebarTitle({ mode }) {
+  // min-h-6（24px）与右侧 size="small" 按钮等高，保证「有无按钮」时标题行高度一致
   if (mode === 'topics') {
     return (
-      <span className="font-bold text-gray-700 flex items-center gap-2">
+      <span className="font-bold text-gray-700 flex items-center gap-2 min-h-6">
         <ApartmentOutlined className="text-indigo-500" /> 主题分类
       </span>
     );
   }
   return (
-    <span className="font-bold text-gray-700 flex items-center gap-2">
+    <span className="font-bold text-gray-700 flex items-center gap-2 min-h-6">
       <TagsOutlined className="text-blue-500" /> 标签
     </span>
   );
@@ -251,7 +252,9 @@ const Sidebar = forwardRef(function Sidebar({
   return (
     <div className="w-full h-full bg-white flex flex-col">
       {!hideHeader && (
-        <div className="flex items-center justify-between p-4 pb-2 border-b border-gray-100">
+        <div className="flex items-center justify-between p-4 pb-2 border-b border-gray-100 min-h-[48px]">
+          {/* min-h-[48px] = 上下内边距 24px + 内容行 24px（对齐 size="small" 按钮的 24px 高度）：
+              锁定标题行高度，使只读模式隐藏右侧按钮时容器高度与编辑模式完全一致，切换不再跳动 */}
           <SidebarTitle mode={mode} />
           <SidebarExtra mode={mode} selectedTagPath={selectedTagPath} setSelectedTagPath={setSelectedTagPath} onManageTags={onManageTags} onManageTopics={handleOpenManage} editMode={editMode} />
         </div>
@@ -267,10 +270,24 @@ const Sidebar = forwardRef(function Sidebar({
                 return (
                   <div key={topic.id} onClick={() => setSelectedTopicId(topic.id)} style={active ? { backgroundColor: `${baseColor}26`, borderColor: baseColor } : { backgroundColor: `${baseColor}0d`, borderColor: 'transparent' }}
                     className={`group border rounded-lg px-3 py-2.5 cursor-pointer transition-all ${active ? 'border font-medium shadow-sm' : 'hover:border-gray-200'}`}>
-                    <div className="flex items-center gap-2">
+                    {/* min-h-[22px]：与「N 人」徽标、编辑按钮等高，保证编辑/只读两种模式下主题项高度完全一致 */}
+                    <div className="flex items-center gap-2 min-h-[22px]">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: baseColor }} />
                       <div className="flex-1 min-w-0"><div className="text-sm text-gray-800 truncate">{topic.name}</div></div>
-                      <div className="text-xs text-gray-400 bg-white/60 px-1.5 py-0.5 rounded-full border border-gray-100">{topic.members?.length || 0} 人</div>
+                      <div className="text-xs text-gray-400 bg-white/60 px-1.5 py-0.5 rounded-full border border-gray-100 shrink-0">{topic.members?.length || 0} 人</div>
+                      {/* 编辑模式：常驻编辑入口，直接进入该主题的编辑弹窗（删除仍只在「管理主题」里操作）。
+                          按钮强制压到 22px，避免撑高主题项；stopPropagation 防止顺带触发「点击 = 筛选该主题」 */}
+                      {editMode && (
+                        <Tooltip title="编辑该主题">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<EditOutlined style={{ color: '#9ca3af' }} />}
+                            className="!h-[22px] !w-[22px] !min-w-0 !p-0 shrink-0"
+                            onClick={(e) => { e.stopPropagation(); openEditModal(topic); }}
+                          />
+                        </Tooltip>
+                      )}
                     </div>
                   </div>
                 );

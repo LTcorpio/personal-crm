@@ -2,6 +2,7 @@ import React from 'react';
 import { Table, Button, Space, Tag, Tooltip } from 'antd';
 import { RightOutlined } from '@ant-design/icons';
 import ContactAvatar from './ContactAvatar';
+import ContactTopics from './ContactTopics';
 
 export default function ContactListTable({
   dataSource,
@@ -13,7 +14,9 @@ export default function ContactListTable({
   avatarConfig,
   editMode = true,
   onAvatarChange,
-  onOpenEdit
+  onOpenEdit,
+  // 「联系人 ID → 所属主题数组」映射，用于渲染「主题」列
+  topicsByContactId
 }) {
   const columns = [
     ...columnConfigs
@@ -90,6 +93,12 @@ export default function ContactListTable({
                 ))}
               </div>
             );
+          }
+          if (col.key === 'topic') {
+            const topics = topicsByContactId?.get(String(record.id)) || [];
+            // 空值展示与其它列保持一致（其它列统一是普通文本 '-'）
+            if (topics.length === 0) return '-';
+            return <ContactTopics topics={topics} className="justify-center" />;
           }
           return text || '-';
         },
