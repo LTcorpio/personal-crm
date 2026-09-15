@@ -5,7 +5,7 @@ import Markdown from 'react-markdown';
 import ContactAvatar from './ContactAvatar';
 import ContactTopics from './ContactTopics';
 import RelatedContactList from './RelatedContactList';
-import { calculateAge } from '../utils/crmUtils';
+import { calculateAge, hasBuiltinContactValue } from '../utils/crmUtils';
 
 export default function ContactCard({ contact, onClick, noBorder = false, onRelatedClick, avatarConfig, onAvatarChange, onOpenEdit, onOpenView, editMode = true, topicsByContactId, cardFields }) {
   // 该联系人所属的主题：卡片视图并入标签行展示，详细档案（noBorder）里另起独立区块
@@ -168,8 +168,8 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
         </div>
         )}
 
-        {/* 身份证 / 联系方式：可整体隐藏 */}
-        {(fieldOn('contact') && (contact.id_card || (contact.contact && Object.values(contact.contact).some(val => val)))) && (
+        {/* 身份证 / 联系方式：可整体隐藏；自定义联系方式不在卡片中展示，仅按内置类型判断 */}
+        {(fieldOn('contact') && (contact.id_card || hasBuiltinContactValue(contact.contact))) && (
           <div className="flex flex-col gap-1.5 bg-gray-50 p-2 rounded-lg text-xs font-mono">
             {contact.id_card && (
               <div className="flex items-start gap-2">

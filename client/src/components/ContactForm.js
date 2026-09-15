@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Modal, Form, Input, Radio, Button, Popconfirm, Tag, Cascader, Popover, Select, AutoComplete } from 'antd';
+import React, { useEffect, useLayoutEffect } from 'react';
+import { Modal, Form, Input, Radio, Button, Popconfirm, Tag, Cascader, Popover, Select, AutoComplete, Tabs, Segmented } from 'antd';
 import {
   MinusCircleOutlined, PlusOutlined, HolderOutlined, UserOutlined, EditOutlined,
 } from '@ant-design/icons';
@@ -7,6 +7,7 @@ import { DndContext, closestCenter } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { avatarUrl } from '../api/crmApi';
+import { extractCustomContactMethods, BUILTIN_CONTACT_TYPES } from '../utils/crmUtils';
 import AvatarManagerModal from './AvatarManagerModal';
 
 const commonStyle = {
@@ -290,9 +291,24 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
   // 打开编辑时对表单值做一次快照，用于判断后续是否产生真实改动
   const initialValuesRef = React.useRef(null);
 
+  // 编辑弹窗布局：flat=平铺（默认），tab=分组 Tab 堆叠；用户选择持久化到 localStorage
+  const [layoutMode, setLayoutMode] = React.useState(() => {
+    try {
+      return localStorage.getItem('crm_contact_form_layout') || 'flat';
+    } catch {
+      return 'flat';
+    }
+  });
+  const changeLayoutMode = (val) => {
+    setLayoutMode(val);
+    try { localStorage.setItem('crm_contact_form_layout', val); } catch {}
+  };
+
   const faceUuid = Form.useWatch('face_uuid', form);
   const genderWatch = Form.useWatch('gender', form);
   const relatedValues = Form.useWatch('related', form);
+  // 订阅整个表单：任何字段变更都触发重渲染，供标题侧「未保存」提示实时刷新
+  Form.useWatch([], form);
 
   // 头像管理弹窗：这里只保留「是否打开」，具体逻辑收敛到 AvatarManagerModal
   const [avatarModalVisible, setAvatarModalVisible] = React.useState(false);
@@ -311,12 +327,15 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
     return dupes;
   }, [relatedValues]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (visible) {
       if (contact) {
         form.setFieldsValue(contact);
+        // 自定义联系方式存成独立 form 字段 contact_custom，打开时从 contact 里拆分初始化
+        form.setFieldsValue({ contact_custom: extractCustomContactMethods(contact?.contact) });
       } else {
         form.resetFields();
+        form.setFieldsValue({ contact_custom: [] });
       }
       // 打开时即取快照：把表单默认值也纳入基准，避免默认值被误判为改动。
       // 必须用 getFieldsValue(true) 取全量 store，而非默认的 getFieldsValue()：
@@ -341,7 +360,20 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
-      onSave({ ...contact, ...values });
+      // 重建 contact 对象：内置类型固定保留，自定义联系方式并入（名称即类型）
+      // 不能直接沿用 values.contact —— 里面可能残留已删除的自定义联系方式
+      const contactMap = {};
+      BUILTIN_CONTACT_TYPES.forEach((key) => {
+        contactMap[key] = values.contact?.[key] ?? '';
+      });
+      (values.contact_custom || []).forEach((item) => {
+        const type = String(item?.type ?? '').trim();
+        const value = String(item?.value ?? '').trim();
+        if (type && value) contactMap[type] = value;
+      });
+      const payload = { ...values, contact: contactMap };
+      delete payload.contact_custom;
+      onSave({ ...contact, ...payload });
     } catch (info) {
       console.log('表单校验失败:', info);
     }
@@ -374,6 +406,9 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
     }
     return false;
   };
+
+  // 供渲染使用（标题侧「未保存」提示）：每当表单值变化时重算一次
+  const dirty = hasUnsavedChanges();
 
   // 关闭前确认：改动与打开前无差异时不打扰，有未保存的编辑时才询问，避免误关丢改动。
   // 不能用 form.isFieldsTouched()：打开时 setFieldsValue(contact) 已把字段标记为 touched，
@@ -431,19 +466,141 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
   };
 
   const renderTitle = () => {
-    if (contact) {
-      return (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span>编辑人员信息</span>
-          <Tag color="blue" className="font-mono cursor-pointer" title="点击可复制 ID">
-            <span className="">ID: </span>
-            <span className="select-all">{contact.id}</span>
-          </Tag>
+    return (
+      <div className="flex items-center gap-3 w-full">
+        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+          <span>{contact ? '编辑人员信息' : '添加新人员'}</span>
+          {contact && (
+            <Tag color="blue" className="m-0 font-mono cursor-pointer" title="点击可复制 ID">
+              <span>ID: </span>
+              <span className="select-all">{contact.id}</span>
+            </Tag>
+          )}
+          {dirty && (
+            <Tag color="gold" className="m-0 font-normal flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+              未保存
+            </Tag>
+          )}
         </div>
-      );
-    }
-    return "添加新人员";
+        <Segmented
+          size="small"
+          value={layoutMode}
+          onChange={changeLayoutMode}
+          className="shrink-0 font-normal"
+          options={[
+            { label: '平铺', value: 'flat' },
+            { label: '堆叠', value: 'tab' },
+          ]}
+        />
+      </div>
+    );
   };
+
+  // —— 分组内容（不含 <h4> 标题，标题由平铺 / 堆叠两种布局各自渲染）——
+
+  const tagsGroup = (
+    <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4">
+      <Form.Item name="tag" label="标签" className="flex-1 mb-0">
+        <EditableTagGroup tagTree={tagTree} />
+      </Form.Item>
+      <Form.Item name="former_name" label="曾用名" className="flex-1 mb-0">
+        <Select
+          mode="tags"
+          style={{ width: '100%' }}
+          placeholder="输入曾用名后回车添加"
+          tokenSeparators={[',', '，']} // 支持逗号自动切分标签
+          options={[]} // 动态标签页默认无需预设选项
+        />
+      </Form.Item>
+    </div>
+  );
+
+  const contactGroup = (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 bg-gray-50 p-3 rounded-lg">
+        <Form.Item name={['contact', 'tel']} label="电话" className="mb-0"><Input /></Form.Item>
+        <Form.Item name={['contact', 'email']} label="邮箱" className="mb-0"><Input /></Form.Item>
+        <Form.Item name={['contact', 'wechat']} label="微信" className="mb-0"><Input /></Form.Item>
+        <Form.Item name={['contact', 'qq']} label="QQ" className="mb-0"><Input /></Form.Item>
+        <Form.Item name={['contact', 'tiktok']} label="抖音" className="mb-0"><Input /></Form.Item>
+      </div>
+
+      {/* 自定义联系方式：名称自由输入，保存在 contact 对象里（类型名即为键），
+          仅在此编辑弹窗与详细档案弹窗中展示，卡片模式不展示 */}
+      <Form.List name="contact_custom">
+        {(fields, { add, remove }) => (
+          <div className="mt-2">
+            {fields.map((field) => (
+              <div key={field.key} className="flex gap-2 items-start mb-2">
+                <Form.Item
+                  name={[field.name, 'type']}
+                  className="mb-0 w-40 shrink-0"
+                  rules={[{ required: true, message: '名称必填' }]}
+                >
+                  <Input placeholder="名称，如：小红书" />
+                </Form.Item>
+                <Form.Item
+                  name={[field.name, 'value']}
+                  className="mb-0 flex-1"
+                  rules={[{ required: true, message: '内容必填' }]}
+                >
+                  <Input placeholder="账号 / 链接" />
+                </Form.Item>
+                <MinusCircleOutlined
+                  className="text-red-500 text-lg cursor-pointer mt-2 hover:text-red-700"
+                  onClick={() => remove(field.name)}
+                />
+              </div>
+            ))}
+            <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add({ type: '', value: '' })}>
+              新增其他联系方式
+            </Button>
+          </div>
+        )}
+      </Form.List>
+    </>
+  );
+
+  const relatedGroup = (
+    <Form.List name="related">
+      {(fields, { add, remove, move }) => (
+        <DndContext
+          collisionDetection={closestCenter}
+          onDragEnd={(event) => {
+            const { active, over } = event;
+            if (over && active.id !== over.id) {
+              move(fields.findIndex(f => f.key === active.id), fields.findIndex(f => f.key === over.id));
+            }
+          }}
+        >
+          <SortableContext
+            items={fields.map((field) => field.key)}
+            strategy={verticalListSortingStrategy}
+          >
+            {fields.map((field) => (
+              <RelatedRow
+                key={field.key}
+                field={field}
+                remove={remove}
+                contacts={contacts}
+                form={form}
+                duplicateIds={duplicateIds}
+              />
+            ))}
+            <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />} className="mt-2">新增关联关系</Button>
+          </SortableContext>
+        </DndContext>
+      )}
+    </Form.List>
+  );
+
+  const extraGroup = (
+    <>
+      <Form.Item name="extra" label="扩展信息" className="mt-0"><Input.TextArea rows={6} placeholder="# 教育经历&#10;- XX大学 计算机科学&#10;# 工作经历&#10;- XX公司 架构师" /></Form.Item>
+      <Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item>
+    </>
+  );
 
   return (
     <>
@@ -453,16 +610,30 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
         onCancel={handleCancel}
         footer={renderFooter()}
         width={1080}
+        centered
         destroyOnHidden
-        maskClosable={false}
-        className=""
+        styles={{
+          header: { paddingRight: 56 },
+          body: {
+            maxHeight: 'calc(100vh - 200px)',
+            overflowY: 'auto',
+            // antd v6 把 Modal 的视觉留白（左右 24px）放在 .ant-modal-container 上，
+            // body 自身 padding 为 0。悬浮滚动条默认贴 body 右缘，会压住表单内容、
+            // 又离卡片右缘留白。这里用负 margin 把 body 扩到卡片右缘，再用等量
+            // paddingRight 顶回内容，让纵向滚动条落在卡片右侧留白内、不遮内容。
+            marginRight: -24,
+            paddingRight: 24,
+          },
+        }}
       >
-        <Form form={form} layout="vertical" name="contact_form" initialValues={{ gender: 1 }}>
+        <Form form={form} layout="vertical" name="contact_form" initialValues={{ gender: 1 }} className="contact-form">
           
           {/* 隐藏表单项，确保存储及提交时能拿到真实的 face_uuid */}
           <Form.Item name="face_uuid" noStyle>
             <Input type="hidden" />
           </Form.Item>
+
+          <h4 className="font-bold mb-2 text-gray-700">基本信息</h4>
 
           {/* 头像 + 基础数据混合行：移动端自适应垂直堆叠 */}
           <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-stretch md:items-start mb-4">
@@ -547,64 +718,32 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4">
-            <Form.Item name="tag" label="标签" className="flex-1 mb-0">
-              <EditableTagGroup tagTree={tagTree} />
-            </Form.Item>
-            <Form.Item name="former_name" label="曾用名" className="flex-1 mb-0">
-              <Select
-                mode="tags"
-                style={{ width: '100%' }}
-                placeholder="输入曾用名后回车添加"
-                tokenSeparators={[',', '，']} // 支持逗号自动切分标签
-                options={[]} // 动态标签页默认无需预设选项
-              />
-            </Form.Item>
-          </div>
-          
-          <h4 className="font-bold my-2 text-gray-700">联系方式</h4>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 bg-gray-50 p-3 rounded-lg">
-            <Form.Item name={['contact', 'tel']} label="电话" className="mb-0"><Input /></Form.Item>
-            <Form.Item name={['contact', 'email']} label="邮箱" className="mb-0"><Input /></Form.Item>
-            <Form.Item name={['contact', 'wechat']} label="微信" className="mb-0"><Input /></Form.Item>
-            <Form.Item name={['contact', 'qq']} label="QQ" className="mb-0"><Input /></Form.Item>
-            <Form.Item name={['contact', 'tiktok']} label="抖音" className="mb-0"><Input /></Form.Item>
-          </div>
+          {layoutMode === 'tab' ? (
+            <Tabs
+              className="mt-4"
+              defaultActiveKey="tags"
+              items={[
+                { key: 'tags', label: '标签与曾用名', forceRender: true, children: tagsGroup },
+                { key: 'contact', label: '联系方式', forceRender: true, children: contactGroup },
+                { key: 'related', label: '关联人', forceRender: true, children: relatedGroup },
+                { key: 'extra', label: '补充信息', forceRender: true, children: extraGroup },
+              ]}
+            />
+          ) : (
+            <>
+              <h4 className="font-bold mt-4 mb-2 text-gray-700">标签与曾用名</h4>
+              {tagsGroup}
 
-          <h4 className="font-bold my-2 text-gray-700 mt-4">关联人</h4>
-          <Form.List name="related">
-            {(fields, { add, remove, move }) => (
-              <DndContext
-                collisionDetection={closestCenter}
-                onDragEnd={(event) => {
-                  const { active, over } = event;
-                  if (over && active.id !== over.id) {
-                    move(fields.findIndex(f => f.key === active.id), fields.findIndex(f => f.key === over.id));
-                  }
-                }}
-              >
-                <SortableContext
-                  items={fields.map((field) => field.key)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {fields.map((field) => (
-                    <RelatedRow
-                      key={field.key}
-                      field={field}
-                      remove={remove}
-                      contacts={contacts}
-                      form={form}
-                      duplicateIds={duplicateIds}
-                    />
-                  ))}
-                  <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />} className="mt-2">新增关联关系</Button>
-                </SortableContext>
-              </DndContext>
-            )}
-          </Form.List>
+              <h4 className="font-bold mt-4 mb-2 text-gray-700">联系方式</h4>
+              {contactGroup}
 
-          <Form.Item name="extra" label="扩展信息" className="mt-4"><Input.TextArea rows={6} placeholder="# 教育经历&#10;- XX大学 计算机科学&#10;# 工作经历&#10;- XX公司 架构师" /></Form.Item>
-          <Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item>
+              <h4 className="font-bold mt-4 mb-2 text-gray-700">关联人</h4>
+              {relatedGroup}
+
+              <h4 className="font-bold mt-4 mb-2 text-gray-700">补充信息</h4>
+              {extraGroup}
+            </>
+          )}
         </Form>
       </Modal>
 

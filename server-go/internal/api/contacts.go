@@ -129,6 +129,7 @@ func (s *Server) handleSaveContact(w http.ResponseWriter, r *http.Request) {
 		isExisting        bool
 		mainFieldsChanged bool
 		oldFaceUUID       string
+		oldName           string
 		methodsRows       []contactMethodRow
 		relationsRows     []oldRelationRow
 		formerNames       []string
@@ -144,8 +145,9 @@ func (s *Server) handleSaveContact(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if rec != nil {
-			isExisting = true
-			oldFaceUUID = rec.faceUUID.String
+				isExisting = true
+				oldFaceUUID = rec.faceUUID.String
+				oldName = rec.name
 
 			if formerNames, err = s.loadFormerNames(data.ID); err != nil {
 				logServerError("保存联系人失败:", err)
@@ -262,6 +264,17 @@ func (s *Server) handleSaveContact(w http.ResponseWriter, r *http.Request) {
 	}
 	// 注：如果仅仅修改了电话或标签，此处将完全略过主表更新，主表 updated_at 保持不变。
 
+	// 改名后回写所有引用该联系人的关联人姓名快照（related_name），
+	// 保证「B 的关联人里 A 的名字」随 A 改名自动同步。
+	if isExisting && oldName != data.Name {
+		if _, err := tx.Exec(`UPDATE contact_relations SET related_name = ? WHERE related_contact_id = ?`, data.Name, finalContactID); err != nil {
+			rollback()
+			logServerError("保存联系人失败:", err)
+			writeErr()
+			return
+		}
+	}
+
 	// 曾用名：全清后按新顺序重新插入，以保持拖拽后的物理顺序
 	newNames := make([]string, 0, len(data.FormerName))
 	for _, v := range data.FormerName {
@@ -284,21 +297,30 @@ func (s *Server) handleSaveContact(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 联系方式：精准子项比对与按需单条更新
-	oldContactMethods := map[string]string{"wechat": "", "qq": "", "email": "", "tel": "", "tiktok": ""}
+	// 联系方式：对「内置 5 类 + 任意自定义类型」做精准子项比对，按需单条增删改
+	oldContactMethods := map[string]string{}
 	for _, m := range methodsRows {
-		if _, ok := oldContactMethods[m.typ]; ok {
+		if strings.TrimSpace(m.value) != "" {
 			oldContactMethods[m.typ] = m.value
 		}
 	}
-	newContactMethods := map[string]string{"wechat": "", "qq": "", "email": "", "tel": "", "tiktok": ""}
-	for k := range newContactMethods {
-		if v, ok := data.Contact[k]; ok {
-			newContactMethods[k] = web.JSStringOrEmpty(v)
+	newContactMethods := map[string]string{}
+	for typ, v := range data.Contact {
+		typ = strings.TrimSpace(typ)
+		if typ == "" {
+			continue
 		}
+		newContactMethods[typ] = strings.TrimSpace(web.JSStringOrEmpty(v))
 	}
 
-	for _, typ := range []string{"wechat", "qq", "email", "tel", "tiktok"} {
+	allTypes := map[string]bool{}
+	for typ := range oldContactMethods {
+		allTypes[typ] = true
+	}
+	for typ := range newContactMethods {
+		allTypes[typ] = true
+	}
+	for typ := range allTypes {
 		oldVal, newVal := oldContactMethods[typ], newContactMethods[typ]
 		if oldVal == newVal {
 			continue
@@ -306,7 +328,7 @@ func (s *Server) handleSaveContact(w http.ResponseWriter, r *http.Request) {
 		var err error
 		switch {
 		case newVal == "":
-			// 新置空，说明删除了该项
+			// 新值置空，说明删除了该项
 			_, err = tx.Exec(`DELETE FROM contact_methods WHERE contact_id = ? AND type = ?`, finalContactID, typ)
 		case oldVal == "":
 			// 老值为空，说明是新增
@@ -1039,9 +1061,9 @@ type contactSnapshot struct {
 
 // buildOldSnapshot 规范化老数据结构。
 func buildOldSnapshot(rec *contactRecord, formerNames []string, methods []contactMethodRow, relations []oldRelationRow, tagPaths []string) contactSnapshot {
-	oldMethods := map[string]string{"wechat": "", "qq": "", "email": "", "tel": "", "tiktok": ""}
+	oldMethods := map[string]string{}
 	for _, m := range methods {
-		if _, ok := oldMethods[m.typ]; ok {
+		if strings.TrimSpace(m.value) != "" {
 			oldMethods[m.typ] = m.value
 		}
 	}
@@ -1095,11 +1117,14 @@ func buildNewSnapshot(data *saveContactPayload) contactSnapshot {
 		}
 	}
 
-	newMethods := map[string]string{"wechat": "", "qq": "", "email": "", "tel": "", "tiktok": ""}
-	for k := range newMethods {
-		if v, ok := data.Contact[k]; ok {
-			newMethods[k] = web.JSStringOrEmpty(v) // data.contact[k] || ""
+	newMethods := map[string]string{}
+	for typ, v := range data.Contact {
+		typ = strings.TrimSpace(typ)
+		val := strings.TrimSpace(web.JSStringOrEmpty(v))
+		if typ == "" || val == "" {
+			continue
 		}
+		newMethods[typ] = val
 	}
 
 	related := make([]snapshotRelated, 0, len(data.Related))

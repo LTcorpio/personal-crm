@@ -10,7 +10,7 @@ import Markdown from 'react-markdown';
 import ContactAvatar from './ContactAvatar';
 import ContactTopics from './ContactTopics';
 import RelatedContactList from './RelatedContactList';
-import { calculateAge, immichPersonUrl } from '../utils/crmUtils';
+import { calculateAge, immichPersonUrl, extractCustomContactMethods } from '../utils/crmUtils';
 
 /**
  * 联系人详细档案（详情弹窗的内容）。
@@ -92,6 +92,10 @@ export default function ContactDetail({
   if (contact.contact?.tiktok) {
     descItems.push({ key: 'tiktok', label: '抖音', children: <span className="break-all font-mono">{contact.contact.tiktok}</span> });
   }
+  // 自定义联系方式（如小红书 / LinkedIn / Instagram 等）：仅在详细档案中展示
+  extractCustomContactMethods(contact.contact).forEach(({ type, value }) => {
+    descItems.push({ key: `contact_${type}`, label: type, children: <span className="break-all font-mono">{value}</span> });
+  });
 
   // ---- 扩展信息 / 备注：有内容即用页签切换（只一项也保留页签），缺则整块不渲染 ----
   const markdownBlock = (content) => (

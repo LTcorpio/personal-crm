@@ -2,6 +2,26 @@ import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Tag } from "antd";
 
+// 联系方式内置类型：这些类型会在卡片模式展示，且展示名/图标固定；
+// 类型名之外的任意键都被视为「自定义联系方式」，仅在详细档案弹窗中展示。
+export const BUILTIN_CONTACT_TYPES = ['tel', 'email', 'wechat', 'qq', 'tiktok'];
+
+/**
+ * 从 contact 对象提取自定义联系方式（排除内置类型；空值忽略）。
+ * @returns {Array<{type: string, value: string}>}
+ */
+export const extractCustomContactMethods = (contact = {}) =>
+  Object.keys(contact || {})
+    .filter((key) => !BUILTIN_CONTACT_TYPES.includes(key) && contact[key])
+    .map((key) => ({ type: key, value: contact[key] }));
+
+/**
+ * 是否包含内置联系方式的有效值。卡片模式的「联系方式」块据此决定是否渲染，
+ * 避免只有自定义联系方式时渲染出一个空盒子。
+ */
+export const hasBuiltinContactValue = (contact = {}) =>
+  BUILTIN_CONTACT_TYPES.some((key) => contact?.[key]);
+
 /**
  * 量测「文字真实排版宽度」。
  *
