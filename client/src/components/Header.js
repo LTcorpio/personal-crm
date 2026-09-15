@@ -16,43 +16,22 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import DisplaySettingsPanel from './DisplaySettingsPanel';
+import BrandWordmark from './BrandWordmark';
 
-// 品牌 LOGO：渐变圆角方块 + 人脉网络节点，寓意「个人人脉管理」
-function BrandLogo({ size = 40 }) {
+// 品牌图标：通讯录本（Remix Icon `contacts-book-2-fill`，Apache 2.0），单色无底板。
+// 与 client/public/favicon.svg 是同一份几何，改这里要同步 favicon。
+function BrandLogo({ size = 30 }) {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 40 40"
-      fill="none"
+      viewBox="0 0 24 24"
       xmlns="http://www.w3.org/2000/svg"
-      className="shrink-0 drop-shadow-sm"
+      className="shrink-0 text-indigo-500"
+      fill="currentColor"
       aria-label="个人 CRM 系统 Logo"
     >
-      <defs>
-        <linearGradient id="crmLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#3b82f6" />
-          <stop offset="55%" stopColor="#6366f1" />
-          <stop offset="100%" stopColor="#8b5cf6" />
-        </linearGradient>
-      </defs>
-      <rect width="40" height="40" rx="11" fill="url(#crmLogoGradient)" />
-      {/* 人脉连接线 */}
-      <path
-        d="M20 16 L11.5 24 M20 16 L28.5 24 M13 26.5 L27 26.5"
-        stroke="white"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        opacity="0.55"
-      />
-      {/* 中心人物节点 */}
-      <circle cx="20" cy="13" r="4.2" fill="white" />
-      <path d="M14 22c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5v1.5H14V22z" fill="white" opacity="0.95" />
-      {/* 两侧人物节点 */}
-      <circle cx="11" cy="25" r="3" fill="white" opacity="0.85" />
-      <path d="M8 31.5c0-2.4 1.8-4 3.5-4s3.5 1.6 3.5 4v1H8v-1z" fill="white" opacity="0.8" />
-      <circle cx="29" cy="25" r="3" fill="white" opacity="0.85" />
-      <path d="M26 31.5c0-2.4 1.8-4 3.5-4s3.5 1.6 3.5 4v1H26v-1z" fill="white" opacity="0.8" />
+      <path d="M20 22H6a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3h14a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1m-1-2v-2H6a1 1 0 1 0 0 2zm-7-10a2 2 0 1 0 0-4a2 2 0 0 0 0 4m-3 4h6a3 3 0 1 0-6 0" />
     </svg>
   );
 }
@@ -180,9 +159,12 @@ export default function Header({ crmFeatureMode, setCrmFeatureMode, editMode = t
       {/* 1. 左侧区域：Logo + 桌面端页面导航 + CRM 功能模式 */}
       <div ref={leftRef} className="flex items-center gap-4 md:gap-6 min-w-0">
         <div className="flex items-center gap-2 md:gap-2.5 cursor-pointer shrink-0" onClick={() => navigate('/')}>
-          <BrandLogo size={38} />
-          <h1 className="text-lg md:text-xl font-bold tracking-tight m-0 sm:block">
-            个人 CRM 系统
+          <BrandLogo size={30} />
+          {/* 标题字号（sm 18 / md 20）留在 h1 上：字标内部尺寸是 em，靠这里的 font-size 缩放。
+              字标是文字轮廓而非文本，故用 sr-only 承载可访问文本，视觉部分 aria-hidden。 */}
+          <h1 className="text-lg md:text-xl m-0 sm:block">
+            <span className="sr-only">个人 CRM 系统</span>
+            <BrandWordmark />
           </h1>
         </div>
 
