@@ -191,19 +191,45 @@ export const enrichTreeWithCounts = (nodes, allContacts, parentPath = '') => {
 
 /**
  * 前端综合搜索与标签过滤算法
+ *
+ * 三个条件互相独立、取交集（搜索关键词 / 标签维度 / 头像维度）：
+ * - 标签维度：`selectedTagPath` 为具体标签路径时按「自身或子孙标签」匹配；
+ *   为哨兵值 '__NO_TAGS__' 或 options.noTag 为真时只保留没有任何标签的人。
+ * - 头像维度：options.noAvatar 为真时只保留「没有本地头像缩略图」的人
+ *   （判定口径＝ face_thumb_url 为空；只有 face_uuid、图还没抓下来的也算无头像，
+ *    正是「待补全档案」的语义）。
+ *
+ * 注：标签维度里「无标签」与「选中某个标签」天然互斥（由调用方的状态互斥保证），
+ * 这里以 noTag 优先。
+ *
+ * @param {Array} contacts 联系人列表
+ * @param {string} searchTxt 搜索关键词
+ * @param {string[]} searchFields 参与搜索的字段
+ * @param {string|null} selectedTagPath 选中的标签路径（或 '__NO_TAGS__' 哨兵值）
+ * @param {{noTag?:boolean, noAvatar?:boolean}} [options] 「无标签 / 无头像」两个筛选开关
  */
-export const filterContacts = (contacts, searchTxt, searchFields, selectedTagPath) => {
-  return contacts.filter(c => {
-    // 1. 如果没有搜索关键词和标签，不过滤
-    if (!searchTxt || !searchFields || searchFields.length === 0) {
-      // 支持“无标签”筛选
-      if (selectedTagPath === '__NO_TAGS__') {
-        return !c.tag || c.tag.length === 0;
-      }
-      return !selectedTagPath || (c.tag && c.tag.some(t => t === selectedTagPath || t.startsWith(selectedTagPath + '/')));
-    }
+export const filterContacts = (contacts, searchTxt, searchFields, selectedTagPath, options = {}) => {
+  const noTagActive = selectedTagPath === '__NO_TAGS__' || options.noTag === true;
+  const noAvatarActive = options.noAvatar === true;
+  const hasSearch = !!searchTxt && Array.isArray(searchFields) && searchFields.length > 0;
 
-    // 2. 动态匹配选中的字段
+  return contacts.filter(c => {
+    // 1. 标签维度
+    let matchesTag = true;
+    if (noTagActive) {
+      matchesTag = !c.tag || c.tag.length === 0;
+    } else if (selectedTagPath) {
+      matchesTag = !!(c.tag && c.tag.some(t => t === selectedTagPath || t.startsWith(selectedTagPath + '/')));
+    }
+    if (!matchesTag) return false;
+
+    // 2. 头像维度（可与标签维度叠加，取交集）
+    if (noAvatarActive && c.face_thumb_url) return false;
+
+    // 3. 没有搜索关键词时，到此即为匹配
+    if (!hasSearch) return true;
+
+    // 4. 动态匹配选中的字段
     const matchesSearch = (
       (searchFields.includes('name') && c.name?.includes(searchTxt)) ||
       (searchFields.includes('title') && c.title?.includes(searchTxt)) ||
@@ -222,15 +248,7 @@ export const filterContacts = (contacts, searchTxt, searchFields, selectedTagPat
       (searchFields.includes('related') && c.related?.some(r => r.name?.includes(searchTxt)))
     );
 
-    // 3. 标签路径匹配,支持“无标签”与搜索框词条联动筛选
-    let matchesTag = true;
-    if (selectedTagPath === '__NO_TAGS__') {
-      matchesTag = !c.tag || c.tag.length === 0;
-    } else if (selectedTagPath) {
-      matchesTag = c.tag && c.tag.some(t => t === selectedTagPath || t.startsWith(selectedTagPath + '/'));
-    }
-
-    return matchesSearch && matchesTag;
+    return matchesSearch;
   });
 };
 

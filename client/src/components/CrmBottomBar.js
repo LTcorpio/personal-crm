@@ -6,6 +6,9 @@ export default function CrmBottomBar({
   crmFeatureMode,
   selectedTopic,
   selectedTagPath,
+  // 「无标签 / 无头像」两个筛选开关（仅在「按标签」模式下生效）
+  filterNoTag = false,
+  filterNoAvatar = false,
   currentPage,
   pageSize,
   total,
@@ -38,33 +41,44 @@ export default function CrmBottomBar({
           >
             {selectedTopic?.name || '未选择主题'}
           </span>
-        ) : selectedTagPath && selectedTagPath !== '__NO_TAGS__' ? (
-          /* 核心优化：移动端窄屏下支持横向滚动，隐藏滚动条，避免撑开高度 */
-          <span className="text-xs bg-blue-50 text-blue-400 px-2 py-1 rounded-md border border-blue-100 flex items-center overflow-x-auto whitespace-nowrap min-w-0 flex-1 md:flex-initial [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {selectedTagPath.split('/').map((tag, index, arr) => {
-              const isLast = index === arr.length - 1;
-              return (
-                <span key={index} className="flex items-center shrink-0">
-                  <span className={isLast ? "font-bold text-blue-700" : "text-blue-700/80"}>
-                    {tag}
-                  </span>
-                  {!isLast && (
-                    <span className="mx-1 text-blue-700/30 font-normal text-[10px]">
-                      <RightOutlined />
-                    </span>
-                  )}
-                </span>
-              );
-            })}
-          </span>
-        ) : selectedTagPath === '__NO_TAGS__' ? (
-          <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-100 font-medium shrink-0">
-            无标签人员
-          </span>
         ) : (
-          <span className="text-xs bg-gray-50 text-gray-600 px-2 py-0.5 rounded border border-gray-200 shrink-0">
-            全部
-          </span>
+          /* 「按标签」模式：标签路径与两个筛选小标签并列展示。
+             核心优化：移动端窄屏下整体支持横向滚动，隐藏滚动条，避免撑开高度 */
+          <div className="flex items-center gap-2 min-w-0 flex-1 md:flex-initial overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {selectedTagPath ? (
+              <span className="text-xs bg-blue-50 text-blue-400 px-2 py-1 rounded-md border border-blue-100 flex items-center shrink-0">
+                {selectedTagPath.split('/').map((tag, index, arr) => {
+                  const isLast = index === arr.length - 1;
+                  return (
+                    <span key={index} className="flex items-center shrink-0">
+                      <span className={isLast ? "font-bold text-blue-700" : "text-blue-700/80"}>
+                        {tag}
+                      </span>
+                      {!isLast && (
+                        <span className="mx-1 text-blue-700/30 font-normal text-[10px]">
+                          <RightOutlined />
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
+              </span>
+            ) : (!filterNoTag && !filterNoAvatar) ? (
+              <span className="text-xs bg-gray-50 text-gray-600 px-2 py-0.5 rounded border border-gray-200 shrink-0">
+                全部
+              </span>
+            ) : null}
+            {filterNoTag && (
+              <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-100 font-medium shrink-0">
+                无标签人员
+              </span>
+            )}
+            {filterNoAvatar && (
+              <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-100 font-medium shrink-0">
+                无头像人员
+              </span>
+            )}
+          </div>
         )}
       </div>
 

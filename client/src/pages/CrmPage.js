@@ -46,8 +46,20 @@ export default function CrmPage({
   const [loading, setLoading] = useState(true);
   const [searchTxt, setSearchTxt] = useState('');
   const [selectedTagPath, setSelectedTagPath] = useState(() => {
-    return localStorage.getItem('crm_selected_tag_path') || null;
+    const saved = localStorage.getItem('crm_selected_tag_path') || null;
+    // 旧版本把「无标签」编码成 '__NO_TAGS__' 存在这个键里，现已拆成独立的 crm_filter_no_tag，
+    // 这里做一次性归一，避免升级后既带着哨兵值又开着开关
+    return saved === '__NO_TAGS__' ? null : saved;
   });
+  // 「无标签 / 无头像」两个筛选：与标签树选中相互配合（无标签互斥、无头像可叠加），各自持久化
+  const [filterNoTag, setFilterNoTag] = useState(() => {
+    if (localStorage.getItem('crm_filter_no_tag') === '1') return true;
+    // 兼容旧数据：老版本用 crm_selected_tag_path='__NO_TAGS__' 表示「无标签」
+    return localStorage.getItem('crm_selected_tag_path') === '__NO_TAGS__';
+  });
+  const [filterNoAvatar, setFilterNoAvatar] = useState(
+    () => localStorage.getItem('crm_filter_no_avatar') === '1'
+  );
   // 人员序列弹窗的显隐由上层（Header 的「显示设置」浮窗）控制，本组件只负责渲染
   const [tagManageVisible, setTagManageVisible] = useState(false);
   const sidebarRef = useRef(null);
@@ -128,7 +140,7 @@ export default function CrmPage({
   });
 
   // 记录上一轮筛选条件，仅在条件实际变化时才重置页码（兼容 StrictMode 双调用）
-  const prevFilters = useRef({ searchTxt, selectedTagPath, selectedTopicId, searchFields, crmFeatureMode, viewMode });
+  const prevFilters = useRef({ searchTxt, selectedTagPath, filterNoTag, filterNoAvatar, selectedTopicId, searchFields, crmFeatureMode, viewMode });
 
   // 切换筛选条件时重置页码，仅在条件实际变化时执行（兼容 StrictMode 双调用）
   useEffect(() => {
@@ -136,20 +148,31 @@ export default function CrmPage({
     const changed =
       prev.searchTxt !== searchTxt ||
       prev.selectedTagPath !== selectedTagPath ||
+      prev.filterNoTag !== filterNoTag ||
+      prev.filterNoAvatar !== filterNoAvatar ||
       prev.selectedTopicId !== selectedTopicId ||
       prev.searchFields !== searchFields ||
       prev.crmFeatureMode !== crmFeatureMode ||
       prev.viewMode !== viewMode;
-    prevFilters.current = { searchTxt, selectedTagPath, selectedTopicId, searchFields, crmFeatureMode, viewMode };
+    prevFilters.current = { searchTxt, selectedTagPath, filterNoTag, filterNoAvatar, selectedTopicId, searchFields, crmFeatureMode, viewMode };
     if (changed) {
       setCurrentPage(1);
     }
-  }, [searchTxt, selectedTagPath, selectedTopicId, searchFields, crmFeatureMode, viewMode]);
+  }, [searchTxt, selectedTagPath, filterNoTag, filterNoAvatar, selectedTopicId, searchFields, crmFeatureMode, viewMode]);
 
   // 持久化选中的标签路径、主题ID、页码
   useEffect(() => {
     localStorage.setItem('crm_selected_tag_path', selectedTagPath || '');
   }, [selectedTagPath]);
+
+  // 「筛选」下拉里的两个开关各自持久化（刷新后保持）
+  useEffect(() => {
+    localStorage.setItem('crm_filter_no_tag', filterNoTag ? '1' : '');
+  }, [filterNoTag]);
+
+  useEffect(() => {
+    localStorage.setItem('crm_filter_no_avatar', filterNoAvatar ? '1' : '');
+  }, [filterNoAvatar]);
 
   useEffect(() => {
     localStorage.setItem('crm_selected_topic_id', selectedTopicId ? String(selectedTopicId) : '');
@@ -336,7 +359,13 @@ export default function CrmPage({
   const activeContacts = crmFeatureMode === 'topics' ? topicContacts : contacts;
   const filteredContacts = crmFeatureMode === 'topics'
     ? filterContacts(activeContacts, searchTxt, searchFields, null)
-    : filterContacts(activeContacts, searchTxt, searchFields, selectedTagPath);
+    : filterContacts(activeContacts, searchTxt, searchFields, selectedTagPath, { noTag: filterNoTag, noAvatar: filterNoAvatar });
+
+  // 「筛选」下拉里两个条件的人数：全库口径（与标签树人数同一套算法，不受搜索框影响）
+  const filterCounts = useMemo(() => ({
+    noTag: contacts.filter(c => !c.tag || c.tag.length === 0).length,
+    noAvatar: contacts.filter(c => !c.face_thumb_url).length,
+  }), [contacts]);
 
   // 根据视图模式计算有效分页参数
   // 卡片/头像视图：pageSize 代表行数，实际每页记录 = 行数 × 每行列数
@@ -425,6 +454,11 @@ export default function CrmPage({
           processedTagTree={processedTagTree}
           selectedTagPath={selectedTagPath}
           setSelectedTagPath={setSelectedTagPath}
+          filterNoTag={filterNoTag}
+          setFilterNoTag={setFilterNoTag}
+          filterNoAvatar={filterNoAvatar}
+          setFilterNoAvatar={setFilterNoAvatar}
+          filterCounts={filterCounts}
           onManageTags={() => setTagManageVisible(true)}
           // 标签树展开状态与标题栏里的「展开 / 收起」入口（由本页统一持有）
           expandedKeys={expandedKeys}
@@ -536,6 +570,11 @@ export default function CrmPage({
               mode={crmFeatureMode}
               selectedTagPath={selectedTagPath}
               setSelectedTagPath={setSelectedTagPath}
+              filterNoTag={filterNoTag}
+              setFilterNoTag={setFilterNoTag}
+              filterNoAvatar={filterNoAvatar}
+              setFilterNoAvatar={setFilterNoAvatar}
+              filterCounts={filterCounts}
               onManageTags={() => setTagManageVisible(true)}
               onManageTopics={() => sidebarRef.current?.openManageModal()} // 👈 通过单 ref 直接唤起主题管理
               editMode={editMode}
@@ -635,6 +674,8 @@ export default function CrmPage({
             crmFeatureMode={crmFeatureMode}
             selectedTopic={selectedTopic}
             selectedTagPath={selectedTagPath}
+            filterNoTag={filterNoTag}
+            filterNoAvatar={filterNoAvatar}
             currentPage={safeCurrentPage}
             pageSize={activePageSize}
             total={effectiveTotal}

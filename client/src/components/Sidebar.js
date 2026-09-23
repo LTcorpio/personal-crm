@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { Tree, Button, Tooltip, ColorPicker, Empty, Form, Input, Modal, Popconfirm, AutoComplete, Dropdown } from 'antd';
+import { Tree, Button, Tooltip, ColorPicker, Empty, Form, Input, Modal, Popconfirm, AutoComplete, Dropdown, Checkbox } from 'antd';
 import {
   ClearOutlined,
   SettingOutlined,
+  FilterOutlined,
   TagsOutlined,
-  UserDeleteOutlined,
   ApartmentOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -237,7 +237,69 @@ export function SidebarTitle({ mode }) {
 // --- 统一导出的功能操作组件 ---
 // 只读模式下，编辑类按钮（管理标签/管理主题）直接隐藏，仅保留筛选类按钮。
 // tagExpandNode 由调用方注入（菜单项来自 useTagTreeExpand），放在最左侧
-export function SidebarExtra({ mode, selectedTagPath, setSelectedTagPath, onManageTags, onManageTopics, editMode = true, tagExpandNode }) {
+//
+// 「筛选」下拉：把「无标签人员 / 无头像人员」两个条件收进同一个 22px 图标按钮里。
+// 侧栏标题栏最小宽度只有 260px（减去左右 px-4 后可用 228px），现有按钮组已占满，
+// 再平铺一个按钮必然挤压标题 —— 合并成下拉后，第二个条件的宽度成本是 0。
+export function SidebarExtra({
+  mode,
+  selectedTagPath, setSelectedTagPath,
+  // 「无标签 / 无头像」两个筛选开关（由 CrmPage 持有并持久化）
+  filterNoTag = false, setFilterNoTag,
+  filterNoAvatar = false, setFilterNoAvatar,
+  // 两个条件的人数（全库口径，与标签树人数同一套算法）
+  filterCounts = { noTag: 0, noAvatar: 0 },
+  onManageTags, onManageTopics, editMode = true, tagExpandNode
+}) {
+  // 两个筛选条件的当前状态 → 菜单项与工具提示都基于它派生
+  const filterActive = filterNoTag || filterNoAvatar;
+  const activeLabels = [filterNoTag && '无标签', filterNoAvatar && '无头像'].filter(Boolean);
+  const filterTooltip = activeLabels.length
+    ? `已筛选：${activeLabels.join('、')}（点击修改）`
+    : '筛选：无标签 / 无头像人员';
+
+  const filterMenuItems = [
+    {
+      key: 'NO_TAG',
+      // 复选框只作展示、不接管点击（pointer-events-none），
+      // 由整行菜单项的 onClick 统一处理开关，避免出现「点一次触发两下」
+      label: (
+        <span className="flex items-center justify-between gap-4 min-w-[164px] cursor-pointer">
+          <span className="flex items-center gap-2">
+            <Checkbox checked={filterNoTag} className="pointer-events-none" />
+            <span>无标签人员</span>
+          </span>
+          <span className="text-xs font-mono text-gray-400">{filterCounts.noTag}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'NO_AVATAR',
+      label: (
+        <span className="flex items-center justify-between gap-4 min-w-[164px] cursor-pointer">
+          <span className="flex items-center gap-2">
+            <Checkbox checked={filterNoAvatar} className="pointer-events-none" />
+            <span>无头像人员</span>
+          </span>
+          <span className="text-xs font-mono text-gray-400">{filterCounts.noAvatar}</span>
+        </span>
+      ),
+    },
+  ];
+
+  const handleFilterMenuClick = ({ key }) => {
+    if (key === 'NO_TAG') {
+      const next = !filterNoTag;
+      setFilterNoTag?.(next);
+      // 互斥：勾上「无标签」即清空标签树里的选中（反之选标签时也会自动取消本项）
+      if (next) setSelectedTagPath?.(null);
+      return;
+    }
+    if (key === 'NO_AVATAR') {
+      setFilterNoAvatar?.(!filterNoAvatar);
+    }
+  };
+
   if (mode === 'topics') {
     // 只读模式下隐藏「管理主题」按钮
     if (!editMode) return null;
@@ -255,15 +317,16 @@ export function SidebarExtra({ mode, selectedTagPath, setSelectedTagPath, onMana
       )}
       {/* 下面两个图标按钮压到 22px：标题栏最小宽度 260px，加上「管理标签」与本行的
           展开按钮后只剩这点余量（22px 也是本文件主题项编辑按钮的既有约定） */}
-      <Tooltip title={selectedTagPath === '__NO_TAGS__' ? '取消无标签筛选' : '筛选无标签人员'}>
-        <Button
-          type={selectedTagPath === '__NO_TAGS__' ? 'primary' : 'default'}
-          size="small"
-          danger={selectedTagPath === '__NO_TAGS__'}
-          icon={<UserDeleteOutlined />}
-          className="!h-[22px] !w-[22px] !min-w-0 !p-0"
-          onClick={() => setSelectedTagPath(selectedTagPath === '__NO_TAGS__' ? null : '__NO_TAGS__')}
-        />
+      <Tooltip title={filterTooltip}>
+        <Dropdown menu={{ items: filterMenuItems, onClick: handleFilterMenuClick }} trigger={['click']} placement="bottomRight">
+          <Button
+            type={filterActive ? 'primary' : 'default'}
+            size="small"
+            danger={filterActive}
+            icon={<FilterOutlined />}
+            className="!h-[22px] !w-[22px] !min-w-0 !p-0"
+          />
+        </Dropdown>
       </Tooltip>
       <Tooltip title="清除选择">
         <Button
@@ -271,8 +334,13 @@ export function SidebarExtra({ mode, selectedTagPath, setSelectedTagPath, onMana
           size="small"
           icon={<ClearOutlined />}
           className="!h-[22px] !w-[22px] !min-w-0 !p-0"
-          onClick={() => setSelectedTagPath(null)}
-          disabled={!selectedTagPath}
+          onClick={() => {
+            // 一键回到「全部」：标签选中与两个筛选开关一起清掉
+            setSelectedTagPath?.(null);
+            setFilterNoTag?.(false);
+            setFilterNoAvatar?.(false);
+          }}
+          disabled={!selectedTagPath && !filterActive}
         />
       </Tooltip>
     </div>
@@ -285,6 +353,8 @@ const Sidebar = forwardRef(function Sidebar({
   contacts = [],
   // 标签相关属性
   processedTagTree = [], selectedTagPath, setSelectedTagPath, onManageTags,
+  // 「无标签 / 无头像」筛选（与标签树选中互斥/可叠加，状态由 CrmPage 持有）
+  filterNoTag = false, setFilterNoTag, filterNoAvatar = false, setFilterNoAvatar, filterCounts,
   // 标签树展开状态：由 CrmPage 的 useTagTreeExpand 提供，标题栏按钮与树共用同一份状态
   expandedKeys = [VIRTUAL_ROOT_KEY], setExpandedKeys, tagExpandNode,
   // 主题相关属性
@@ -378,7 +448,11 @@ const Sidebar = forwardRef(function Sidebar({
           {/* h-12（48px）：与主内容区搜索区（SearchFilter）锁定同一高度，两条 border-b 连成一条线；
               内容行 24px 居中（对齐 size="small" 按钮的 24px 高度），只读模式隐藏右侧按钮时高度不变 */}
           <SidebarTitle mode={mode} />
-          <SidebarExtra mode={mode} selectedTagPath={selectedTagPath} setSelectedTagPath={setSelectedTagPath} onManageTags={onManageTags} onManageTopics={handleOpenManage} editMode={editMode} tagExpandNode={tagExpandNode} />
+          <SidebarExtra mode={mode} selectedTagPath={selectedTagPath} setSelectedTagPath={setSelectedTagPath}
+            filterNoTag={filterNoTag} setFilterNoTag={setFilterNoTag}
+            filterNoAvatar={filterNoAvatar} setFilterNoAvatar={setFilterNoAvatar}
+            filterCounts={filterCounts}
+            onManageTags={onManageTags} onManageTopics={handleOpenManage} editMode={editMode} tagExpandNode={tagExpandNode} />
         </div>
       )}
 
@@ -436,11 +510,12 @@ const Sidebar = forwardRef(function Sidebar({
               // 之后由标题栏的「展开 / 收起」菜单与用户点击箭头共同维护
               expandedKeys={expandedKeys}
               onExpand={(keys) => setExpandedKeys?.(keys)}
-              // 处理高亮：如果 selectedTagPath 为空（即代表全部），则高亮这个根节点
+              // 处理高亮：selectedTagPath 为空时高亮虚拟根（＝全部）；
+              // 但「无标签」筛选生效时三者都不高亮 —— 此时看的不是「全部」也不是某个标签
               selectedKeys={
-                !selectedTagPath
-                  ? [VIRTUAL_ROOT_KEY]
-                  : (selectedTagPath !== '__NO_TAGS__' ? [selectedTagPath] : [])
+                filterNoTag
+                  ? []
+                  : (!selectedTagPath ? [VIRTUAL_ROOT_KEY] : [selectedTagPath])
               }
               // 点击事件拦截处理
               onSelect={(keys) => {
@@ -449,8 +524,12 @@ const Sidebar = forwardRef(function Sidebar({
                   // 如果点击的是最外层父节点，相当于清空筛选（即查看全部）
                   if (targetKey === VIRTUAL_ROOT_KEY) {
                     setSelectedTagPath(null);
+                    // 「全部」＝不带任何标签条件，顺带取消「无标签」筛选
+                    setFilterNoTag?.(false);
                   } else {
                     setSelectedTagPath(targetKey);
+                    // 互斥：选中具体标签即取消「无标签」筛选（「无头像」可继续叠加）
+                    setFilterNoTag?.(false);
                   }
                 } else {
                   // 允许点击已选中的节点来取消选择
