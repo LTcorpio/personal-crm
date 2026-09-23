@@ -24,15 +24,6 @@ function formatAvatarTime(value) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// 历史头像的来源描述
-function avatarSourceText(item) {
-  if (item.source === 'immich') return 'Immich 来源';
-  if (item.original_file_name) {
-    return item.original_file_name === item.file_name ? '本地上传 · 未裁剪' : '本地上传 · 已裁剪';
-  }
-  return '本地上传';
-}
-
 /**
  * 头像管理弹窗（独立组件）。
  *
@@ -46,6 +37,8 @@ function avatarSourceText(item) {
 export default function AvatarManagerModal({
   open,
   contactId,
+  // 当前联系人姓名：仅用于弹窗内提示「正在改谁的头像」，不参与任何写库逻辑
+  contactName = '',
   initialFaceUuid = '',
   onClose,
   onSaved,
@@ -134,6 +127,16 @@ export default function AvatarManagerModal({
   const avatarDirty =
     (draft && !(draft.kind === 'history' && avatarState.hash && draft.hash === avatarState.hash)) ||
     pendingDeletes.length > 0;
+
+  // 草稿来源文案：未保存的新头像来自哪里，直接并进标题的「未保存」徽标，
+  // 不再在姓名下方另起一行（只有「删除历史头像」这类没有新头像的草稿才没有来源）。
+  const draftSourceText = draft
+    ? draft.kind === 'upload'
+      ? '本地上传'
+      : draft.kind === 'immich'
+        ? 'Immich'
+        : '历史头像'
+    : '';
 
   // 真正关闭弹窗：清空草稿并释放临时地址
   const doClose = () => {
@@ -325,10 +328,24 @@ export default function AvatarManagerModal({
   return (
     <>
       <Modal
+        // 标题行与「联系人详细档案」同构：左侧标题（带未保存提示），右侧显示当前联系人的 ID，
+        // 这样在任何入口打开都能立刻确认改的是谁。pr-6 给右上角关闭按钮留出位置。
         title={(
-          <div className="flex items-center gap-2">
-            <span>头像管理</span>
-            {avatarDirty && <Tag color="orange" className="mr-0">未保存</Tag>}
+          <div className="flex items-center justify-between pr-6">
+            <span className="flex items-center gap-2 min-w-0">
+              <span>头像管理</span>
+              {/* 未保存徽标：带上新头像的来源，替掉原先姓名下方那行「新头像待保存 · 来源：…」 */}
+              {avatarDirty && (
+                <Tag color="orange" className="mr-0">
+                  未保存{draftSourceText ? ` · ${draftSourceText}` : ''}
+                </Tag>
+              )}
+            </span>
+            {contactId && (
+              <Tag color="default" className="font-mono text-gray-400 border-gray-200 m-0">
+                ID: {contactId}
+              </Tag>
+            )}
           </div>
         )}
         open={open}
@@ -370,17 +387,11 @@ export default function AvatarManagerModal({
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm text-gray-500 mb-3">
-                {draft ? (
-                  <span className="text-amber-600">
-                    新头像待保存 · 来源：
-                    {draft.kind === 'upload' ? '本地上传' : draft.kind === 'immich' ? 'Immich' : '历史头像'}
-                  </span>
-                ) : avatarState.hash ? (
-                  <>当前头像 <span className="font-mono text-xs text-gray-400">{avatarState.hash.slice(0, 12)}…</span></>
-                ) : '尚未设置头像'}
-                {!contactId && <span className="ml-2 text-amber-600">（联系人未保存，暂不能上传或写入头像）</span>}
-              </div>
+              {/* 姓名：字号与「联系人详细档案」资料头一致（text-3xl font-bold）。
+                  姓名下方不再有任何状态/说明文字（原先的「当前头像 / 尚未设置头像」一行已整行删除）。 */}
+              {contactName && (
+                <div className="text-3xl font-bold text-gray-800 truncate mb-2">{contactName}</div>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button icon={<CloudDownloadOutlined />} loading={uuidPreviewLoading} onClick={handleFetchAvatar}>
                   从 Immich 获取
@@ -479,13 +490,16 @@ export default function AvatarManagerModal({
                       }`}
                     >
                       <div className="relative w-full aspect-square rounded-md overflow-hidden bg-gray-50 cursor-pointer" onClick={() => { if (!markedDelete && !isCurrent) pickHistoryAvatar(item); }}>
+                        {/* 悬停在图片上显示这张头像的文件名（＝内容哈希 + 扩展名），只显示文件名本身、
+                            不带任何前缀；用浏览器原生 title 提示，不自绘 Tooltip。
+                            来源看右上角徽标、时间见下方一行，无需在提示里重复 */}
                         <img
                           src={avatarUrl(item.url)}
                           alt="历史头像"
                           draggable={false}
+                          title={item.file_name || item.hash}
                           className="w-full h-full object-cover block"
                           style={{ opacity: markedDelete ? 0.45 : 1 }}
-                          title={`${avatarSourceText(item)}${item.created_at ? ` · ${formatAvatarTime(item.created_at)}` : ''}${isCurrent ? ' · 当前头像' : ' · 点击设为当前头像'}`}
                         />
                         {isCurrent && !markedDelete && (
                           <span className="absolute top-1 left-1 text-[10px] leading-4 bg-blue-500 text-white px-1 rounded pointer-events-none">
@@ -567,12 +581,6 @@ export default function AvatarManagerModal({
               </div>
             )}
           </div>
-
-          {avatarDirty && (
-            <div className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded p-2">
-              以上改动尚未生效，点右下角「保存」后才会写入；删除历史头像同样需要保存。
-            </div>
-          )}
         </div>
 
         {/* 共享的大图预览层：真正根治空白的关键是让承载预览的宿主元素不占任何布局空间。
