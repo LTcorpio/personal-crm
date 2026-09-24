@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Button, Drawer, Empty, Modal, Popover, Tag, Tree } from 'antd';
-import { BarChartOutlined, FilterOutlined, TagsOutlined, TeamOutlined } from '@ant-design/icons';
+import { BarChartOutlined, CaretDownFilled, FilterOutlined, TagsOutlined, TeamOutlined } from '@ant-design/icons';
 
 const currentYear = new Date().getFullYear();
 const MONTHS = [
@@ -285,6 +285,9 @@ export default function CrmStatsView({ contacts, tagTree, onContactClick }) {
           <Tree
             checkable
             defaultExpandAll
+            // 展开 / 收起：与侧边栏标签树保持同一套（三角 12px；不传 showLine 才有三角，
+            // 叶子节点按 antd 行为不渲染图标）
+            switcherIcon={<CaretDownFilled style={{ fontSize: 12 }} />}
             // blockNode + min-w-0：与侧边栏标签树保持同一套标题布局
             // （标签名过长省略号截断、人数靠右对齐，不换行也不撑破容器）
             blockNode
@@ -294,7 +297,10 @@ export default function CrmStatsView({ contacts, tagTree, onContactClick }) {
               // 支持多选，如果是严格受控模式也可以加 checkStrictly
               setSelectedTags(Array.isArray(checkedKeys) ? checkedKeys : checkedKeys.checked);
             }}
-            className="text-sm [&_.ant-tree-treenode]:min-w-0 [&_.ant-tree-node-content-wrapper]:min-w-0"
+            // switcher 三条 + ps-1：与 Sidebar.js 的标签树完全相同 ——
+            // 图标列（宽度由 App.js 的 Tree token 压到 16px）改成 flex、图标靠右且行内居中，
+            // 节点内容区只收左侧内边距（8px → 4px）。改一边必须同步另一边
+            className="text-sm [&_.ant-tree-treenode]:min-w-0 [&_.ant-tree-node-content-wrapper]:min-w-0 [&_.ant-tree-switcher]:!inline-flex [&_.ant-tree-switcher]:!items-center [&_.ant-tree-switcher]:!justify-end [&_.ant-tree-node-content-wrapper]:!ps-1"
           />
         ) : (
           <div className="text-gray-400 text-xs text-center py-8">暂无标签数据</div>

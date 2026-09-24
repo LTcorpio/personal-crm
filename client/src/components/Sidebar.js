@@ -10,7 +10,8 @@ import {
   EditOutlined,
   HolderOutlined,
   PlusOutlined,
-  NodeExpandOutlined
+  NodeExpandOutlined,
+  CaretDownFilled
 } from '@ant-design/icons';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -390,6 +391,20 @@ const Sidebar = forwardRef(function Sidebar({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
+  // 「点标签名即可展开下级」用：先算好哪些标签带下级（复用标题栏那份层级信息，
+  // 只有一个来源，不另写一遍遍历）。叶子没有下级 → 点了只筛选；虚拟根「全部」也不在集合里
+  const expandableKeySet = useMemo(
+    () => new Set(Object.values(collectExpandMeta(processedTagTree).expandableByLevel).flat()),
+    [processedTagTree]
+  );
+
+  const toggleExpanded = (key) => {
+    setExpandedKeys?.((prev) => {
+      const list = prev || [];
+      return list.includes(key) ? list.filter((k) => k !== key) : [...list, key];
+    });
+  };
+
   const openCreateModal = () => {
     setEditingTopic(null);
     form.setFieldsValue({ name: '', color: '#6366f1', members: [] });
@@ -493,12 +508,20 @@ const Sidebar = forwardRef(function Sidebar({
         ) : (
           processedTagTree.length > 0 ? (
             <Tree
-              showLine={{ showLeafIcon: true }}
+              // 展开 / 收起改用 antd 默认的实心三角（不带 showLine 才会用它；
+              // showLine 给的是方框加减号 + 叶子文件图标）。叶子节点按 antd 行为不渲染图标。
+              // 尺寸显式给 12px：`.ant-tree-switcher-icon` 默认只有 10px，跟 14px 标签名不搭
+              switcherIcon={<CaretDownFilled style={{ fontSize: 12 }} />}
               // blockNode：让节点内容撑满整行，标题才能「左侧标签名截断 + 右侧人数对齐」。
               // min-w-0 是必须的：节点容器是 flex 项，默认 min-width:auto（= 内容最小宽度），
-              // 标题又是 nowrap，不放开这道下限的话长标签会把行顶宽、滚动条出现而不是省略号
+              // 标题又是 nowrap，不放开这道下限的话长标签会把行顶宽、滚动条出现而不是省略号。
+              // switcher 三条：图标列（宽度由 App.js 的 Tree token 压到 16px）改成 flex，
+              //   图标靠列右缘 + 行内垂直居中 —— antd 默认是块内居中且骑基线，视觉上偏下；
+              // ps-1：节点内容区左内边距 8px → 4px，这是「图标离文字远」的另一半原因。
+              //   ⚠️ 只收左内边距，右侧仍 8px，保证右边的人数徽标位置不变。
+              //   ⚠️ 统计页抽屉里那棵树（CrmStatsView.js）必须同步这四条，两处形态才一致
               blockNode
-              className="text-sm [&_.ant-tree-treenode]:min-w-0 [&_.ant-tree-node-content-wrapper]:min-w-0"
+              className="text-sm [&_.ant-tree-treenode]:min-w-0 [&_.ant-tree-node-content-wrapper]:min-w-0 [&_.ant-tree-switcher]:!inline-flex [&_.ant-tree-switcher]:!items-center [&_.ant-tree-switcher]:!justify-end [&_.ant-tree-node-content-wrapper]:!ps-1"
               treeData={[
                 {
                   title: <span className="font-medium text-gray-800">全部</span>,
@@ -517,10 +540,17 @@ const Sidebar = forwardRef(function Sidebar({
                   ? []
                   : (!selectedTagPath ? [VIRTUAL_ROOT_KEY] : [selectedTagPath])
               }
-              // 点击事件拦截处理
-              onSelect={(keys) => {
+              // 点击事件拦截处理。
+              // 除原有的「选中＝筛选」外，点标签名还会切换它自己的展开 / 收起
+              // （仅对「有下级」的标签生效；叶子点了只筛选、不切换）。
+              // 用 info.node.key 而不是 keys[0]：再点已选中的节点时 antd 会回一个空 keys，
+              // 那种情况下也需要拿到被点的节点才能收起它。
+              onSelect={(keys, info) => {
+                const targetKey = info?.node?.key ?? keys[0];
+                if (targetKey && targetKey !== VIRTUAL_ROOT_KEY && expandableKeySet.has(targetKey)) {
+                  toggleExpanded(targetKey);
+                }
                 if (keys.length > 0) {
-                  const targetKey = keys[0];
                   // 如果点击的是最外层父节点，相当于清空筛选（即查看全部）
                   if (targetKey === VIRTUAL_ROOT_KEY) {
                     setSelectedTagPath(null);

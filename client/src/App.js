@@ -124,6 +124,13 @@ export default function App() {
           // motionDurationMid: '0.1s',
           // motionDurationSlow: '0.1s',
         },
+        // 标签树（侧栏 + 统计页抽屉共用同一套 token，改这里两棵树一起变）：
+        // antd 默认 switcherSize = indentSize = controlHeightSM = 24px，且图标列自带
+        // (24−16)/2 = 4px 外边距 —— 合计把展开图标推得离标签名很远。压到 16px 后
+        // 那个外边距自动变 0，图标列也与卡片里的 `w-4` 图标列同宽。
+        components: {
+          Tree: { switcherSize: 16, indentSize: 16 },
+        },
       }}
       locale={zhCN}
     >
