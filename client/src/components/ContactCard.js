@@ -126,7 +126,11 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
       <div className="space-y-2 text-sm text-gray-600 flex-1">
         {fieldOn('address') && contact.location && (
           <div className="flex items-start gap-2">
-            <EnvironmentOutlined className="text-gray-400 mt-1 flex-shrink-0" />
+            {/* 图标居中于「首行行高盒」（h-5 = text-sm 的 20px 行高），与文字同行框中线；
+                保留 items-start，地址换行时图标仍贴首行 */}
+            <span className="flex h-5 flex-shrink-0 items-center text-gray-400">
+              <EnvironmentOutlined />
+            </span>
             <span className="break-all">{contact.location}{contact.address}</span>
           </div>
         )}
@@ -168,12 +172,14 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
         </div>
         )}
 
-        {/* 身份证 / 联系方式：可整体隐藏；自定义联系方式不在卡片中展示，仅按内置类型判断 */}
+        {/* 身份证 / 联系方式：可整体隐藏；自定义联系方式不在卡片中展示，仅按内置类型判断。
+            图标列约定：w-4 固定 16px 列宽（文字左边缘跨行对齐）+ h-4 = text-xs 的 16px 行高，
+            图标在其中垂直居中 → 中心落在行框中线；行容器保留 items-start，多行内容时图标仍贴首行 */}
         {(fieldOn('contact') && (contact.id_card || hasBuiltinContactValue(contact.contact))) && (
           <div className="flex flex-col gap-1.5 bg-gray-50 p-2 rounded-lg text-xs font-mono">
             {contact.id_card && (
               <div className="flex items-start gap-2">
-                <span className="w-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
+                <span className="w-4 h-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
                   <IdcardOutlined className="text-gray-500" />
                 </span>
                 <span className="break-all flex-1 text-gray-600">{contact.id_card}</span>
@@ -181,7 +187,7 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
             )}
             {contact.contact?.tel && (
               <div className="flex items-start gap-2">
-                <span className="w-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
+                <span className="w-4 h-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
                   <PhoneOutlined className="text-green-500" />
                 </span>
                 <span className="break-all flex-1 text-gray-600">{contact.contact.tel}</span>
@@ -189,7 +195,7 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
             )}
             {contact.contact?.wechat && (
               <div className="flex items-start gap-2">
-                <span className="w-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
+                <span className="w-4 h-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
                   <WechatOutlined className="text-green-600" />
                 </span>
                 <span className="break-all flex-1 text-gray-600">{contact.contact.wechat}</span>
@@ -197,7 +203,7 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
             )}
             {contact.contact?.qq && (
               <div className="flex items-start gap-2">
-                <span className="w-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
+                <span className="w-4 h-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
                   <QqOutlined className="text-blue-400" />
                 </span>
                 <span className="break-all flex-1 text-gray-600">{contact.contact.qq}</span>
@@ -205,7 +211,7 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
             )}
             {contact.contact?.email && (
               <div className="flex items-start gap-2">
-                <span className="w-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
+                <span className="w-4 h-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
                   <MailOutlined className="text-purple-400" />
                 </span>
                 <span className="break-all flex-1 text-gray-600">{contact.contact.email}</span>
@@ -213,7 +219,7 @@ export default function ContactCard({ contact, onClick, noBorder = false, onRela
             )}
             {contact.contact?.tiktok && (
               <div className="flex items-start gap-2">
-                <span className="w-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
+                <span className="w-4 h-4 text-right flex-shrink-0 text-gray-400 flex items-center justify-end gap-1">
                   <TikTokOutlined className="text-gray-700" />
                 </span>
                 <span className="break-all flex-1 text-gray-600">{contact.contact.tiktok}</span>
