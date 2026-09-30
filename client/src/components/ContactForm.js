@@ -613,7 +613,9 @@ export default function ContactForm({ visible, contact, tagTree = [], contacts =
         centered
         destroyOnHidden
         styles={{
-          header: { paddingRight: 56 },
+          // 标题行右侧留给关闭按钮的间距：v6 关闭按钮 32px 宽、距卡片右缘 12px，
+          // 即侵入 24px 内容留白中的 20px；这里留 32px，让「平铺/堆叠」与按钮左缘仅隔 12px
+          header: { paddingRight: 32 },
           body: {
             maxHeight: 'calc(100vh - 200px)',
             overflowY: 'auto',

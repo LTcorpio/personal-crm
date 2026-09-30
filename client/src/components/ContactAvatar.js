@@ -22,6 +22,9 @@ export default function ContactAvatar({
   editMode = true,
   // 详细档案里「查看人员信息」无意义（已经在详情中），传 true 可从右键菜单移除该项
   hideViewItem = false,
+  // 单击头像直接打开大图预览（仅「联系人详细档案」开启）：
+  // 卡片 / 列表里头像的单击另有父级语义（打开详情 / 编辑弹窗），不能开
+  previewOnClick = false,
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSrc, setPreviewSrc] = useState('');
@@ -76,6 +79,13 @@ export default function ContactAvatar({
       longPressTriggered.current = false;
       e.preventDefault();
       e.stopPropagation();
+      return;
+    }
+    // 单击直接看大图（详细档案）：拦截冒泡，避免同时触发父级点击逻辑
+    if (previewOnClick && thumbUrl) {
+      e.stopPropagation();
+      setPreviewSrc(avatarUrl(thumbUrl));
+      setPreviewOpen(true);
     }
   };
 
@@ -137,6 +147,8 @@ export default function ContactAvatar({
       onClick={handleAvatarClick}
       style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
       className={`rounded-full select-none flex items-center justify-center overflow-hidden border flex-shrink-0 ${sizeClass} ${
+        previewOnClick && thumbUrl ? 'cursor-zoom-in' : ''
+      } ${
         isTextFallback ? 'bg-blue-50 border-blue-200' : 'bg-gray-100 border-gray-200'
       }`}
     >

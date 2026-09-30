@@ -1,4 +1,4 @@
-# 个人 CRM 系统
+# 人迹（personal-crm）
 
 一套自托管的私人关系管理系统：React 前端 + 后端服务 + SQLite，支持联系人档案、多级标签、主题分组、名单导入（Excel）与 Immich 人脸头像集成。
 

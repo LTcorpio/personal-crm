@@ -127,6 +127,7 @@ export default function ContactDetail({
           editMode={editMode}
           avatarConfig={avatarConfig}
           hideViewItem
+          previewOnClick
           sizeClass="w-20 h-20"
           textClass="text-[34px]"
           iconClass="text-3xl"

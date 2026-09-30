@@ -1,6 +1,6 @@
 {
-  "short_name": "CRM",
-  "name": "个人 CRM 系统",
+  "short_name": "人迹",
+  "name": "人迹（personal-crm）",
   "icons": [
     {
       "src": "favicon.svg",
