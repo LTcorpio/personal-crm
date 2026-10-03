@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Input, Checkbox, Popover, Button, Space } from 'antd';
+import { Input, Checkbox, Popover, Button, Space, Switch } from 'antd';
 import { FilterOutlined, SearchOutlined } from '@ant-design/icons';
 
 // 完整的可查选项映射
@@ -28,11 +28,14 @@ export default function SearchFilter({
   setSearchTxt,
   searchFields = [],
   onSearchFieldsChange,
+  fuzzySearch = false,
+  onFuzzySearchChange,
   leading, // 行首插槽：目前用于放侧边栏「展开/收起」按钮，保持本组件对侧栏状态无感知
 }) {
   const [visible, setVisible] = useState(false);
   // 气泡内部的局部临时状态，防止未点击确定就直接修改了全局搜索行为
   const [tempFields, setTempFields] = useState(searchFields);
+  const [tempFuzzy, setTempFuzzy] = useState(fuzzySearch);
 
   const [tempSearchTxt, setTempSearchTxt] = useState(searchTxt);
   useEffect(() => {
@@ -52,8 +55,9 @@ export default function SearchFilter({
     }
     if (visible) {
       setTempFields(searchFields);
+      setTempFuzzy(fuzzySearch);
     }
-  }, [visible, searchFields, onSearchFieldsChange]);
+  }, [visible, searchFields, fuzzySearch, onSearchFieldsChange]);
 
   // 处理全选/全不选
   const isAllChecked = tempFields.length === OPTIONS.length;
@@ -65,11 +69,13 @@ export default function SearchFilter({
   // 恢复默认
   const handleReset = () => {
     setTempFields(DEFAULT_VALUES);
+    setTempFuzzy(false);
   };
 
   // 点击确认按钮：保存并关闭
   const handleSave = () => {
     onSearchFieldsChange(tempFields); // 触发父组件更新状态并持久化
+    onFuzzySearchChange?.(tempFuzzy);
     setVisible(false);
   };
 
@@ -100,6 +106,15 @@ export default function SearchFilter({
         value={tempFields}
         onChange={(checkedValues) => setTempFields(checkedValues)}
       />
+
+      {/* 模糊搜索开关：开启后选中字段额外支持拼音全拼与首字母匹配 */}
+      <div className="flex items-center justify-between mb-4 px-2 py-2 rounded bg-gray-50">
+        <div className="flex flex-col">
+          <span className="text-gray-700 text-sm">模糊搜索</span>
+          <span className="text-gray-400 text-xs">支持拼音全拼与首字母，如 zhangsan / zs</span>
+        </div>
+        <Switch size="small" checked={tempFuzzy} onChange={setTempFuzzy} />
+      </div>
 
       {/* 底部操作按钮 */}
       <div className="flex justify-end gap-2 pt-2 border-t border-gray-50">

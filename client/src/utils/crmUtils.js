@@ -1,4 +1,5 @@
 import { Tag } from "antd";
+import { pinyin } from "pinyin-pro";
 
 // 联系方式内置类型：这些类型会在卡片模式展示，且展示名/图标固定；
 // 类型名之外的任意键都被视为「自定义联系方式」，仅在详细档案弹窗中展示。
@@ -54,6 +55,41 @@ export const enrichTreeWithCounts = (nodes, allContacts, parentPath = '') => {
   });
 };
 
+// 拼音索引缓存：同一段文本只转一次拼音，避免每次输入都在过滤循环里重复计算。
+const pinyinIndexCache = new Map();
+
+/**
+ * 生成一段文本的「全拼 + 首字母」索引，用于中文的拼音模糊搜索。
+ * 统一转小写并去掉音节分隔空格，例如「张三丰」→ { full: 'zhangsanfeng', initials: 'zsf' }。
+ * 非中文字符会被 pinyin-pro 原样保留，因此「Luck 张」这类混排也能正常匹配。
+ */
+const buildPinyinIndex = (text) => {
+  const key = String(text);
+  const cached = pinyinIndexCache.get(key);
+  if (cached) return cached;
+  const index = {
+    full: pinyin(key, { toneType: 'none' }).replace(/\s+/g, '').toLowerCase(),
+    initials: pinyin(key, { pattern: 'first', toneType: 'none' }).replace(/\s+/g, '').toLowerCase(),
+  };
+  pinyinIndexCache.set(key, index);
+  return index;
+};
+
+/**
+ * 单段文本的搜索匹配：
+ * - 原文直接包含关键词（原有精确子串行为）
+ * - 开启模糊搜索时，关键词去掉空白后再命中「全拼」或「首字母」
+ *   （如 zhangsf / zhangsanfeng / zsf 都能命中「张三丰」）
+ */
+const matchText = (text, rawKeyword, normalizedKeyword, fuzzyActive) => {
+  if (text === undefined || text === null || text === '') return false;
+  const value = String(text);
+  if (value.includes(rawKeyword)) return true;
+  if (!fuzzyActive || !normalizedKeyword) return false;
+  const { full, initials } = buildPinyinIndex(value);
+  return full.includes(normalizedKeyword) || initials.includes(normalizedKeyword);
+};
+
 /**
  * 前端综合搜索与标签过滤算法
  *
@@ -63,6 +99,7 @@ export const enrichTreeWithCounts = (nodes, allContacts, parentPath = '') => {
  * - 头像维度：options.noAvatar 为真时只保留「没有本地头像缩略图」的人
  *   （判定口径＝ face_thumb_url 为空；只有 face_uuid、图还没抓下来的也算无头像，
  *    正是「待补全档案」的语义）。
+ * - 模糊维度：options.fuzzy 为真时在选中字段上额外支持拼音全拼与首字母匹配。
  *
  * 注：标签维度里「无标签」与「选中某个标签」天然互斥（由调用方的状态互斥保证），
  * 这里以 noTag 优先。
@@ -71,12 +108,16 @@ export const enrichTreeWithCounts = (nodes, allContacts, parentPath = '') => {
  * @param {string} searchTxt 搜索关键词
  * @param {string[]} searchFields 参与搜索的字段
  * @param {string|null} selectedTagPath 选中的标签路径（或 '__NO_TAGS__' 哨兵值）
- * @param {{noTag?:boolean, noAvatar?:boolean}} [options] 「无标签 / 无头像」两个筛选开关
+ * @param {{noTag?:boolean, noAvatar?:boolean, fuzzy?:boolean}} [options] 「无标签 / 无头像 / 模糊搜索」开关
  */
 export const filterContacts = (contacts, searchTxt, searchFields, selectedTagPath, options = {}) => {
   const noTagActive = selectedTagPath === '__NO_TAGS__' || options.noTag === true;
   const noAvatarActive = options.noAvatar === true;
+  const fuzzyActive = options.fuzzy === true;
   const hasSearch = !!searchTxt && Array.isArray(searchFields) && searchFields.length > 0;
+  // 模糊匹配用：去掉空白并转小写，让「zhang san」「ZhangSan」都能命中「张三」
+  const normalizedKeyword = hasSearch && fuzzyActive ? searchTxt.replace(/\s+/g, '').toLowerCase() : '';
+  const match = (value) => matchText(value, searchTxt, normalizedKeyword, fuzzyActive);
 
   return contacts.filter(c => {
     // 1. 标签维度
@@ -96,21 +137,21 @@ export const filterContacts = (contacts, searchTxt, searchFields, selectedTagPat
 
     // 4. 动态匹配选中的字段
     const matchesSearch = (
-      (searchFields.includes('name') && c.name?.includes(searchTxt)) ||
-      (searchFields.includes('title') && c.title?.includes(searchTxt)) ||
-      (searchFields.includes('ethnicity') && c.ethnicity?.includes(searchTxt)) ||
-      (searchFields.includes('native_place') && c.native_place?.includes(searchTxt)) ||
-      (searchFields.includes('location') && c.location?.includes(searchTxt)) ||
-      (searchFields.includes('address') && c.address?.includes(searchTxt)) ||
-      (searchFields.includes('id_card') && c.id_card?.includes(searchTxt)) ||
-      (searchFields.includes('birthday_solar') && c.birthday_solar?.includes(searchTxt)) ||
-      (searchFields.includes('birthday_lunar') && c.birthday_lunar?.includes(searchTxt)) ||
-      (searchFields.includes('deathday') && c.deathday?.includes(searchTxt)) ||
-      (searchFields.includes('extra') && c.extra?.includes(searchTxt)) ||
-      (searchFields.includes('remark') && c.remark?.includes(searchTxt)) ||
-      (searchFields.includes('former_name') && c.former_name?.some(n => n.includes(searchTxt))) ||
-      (searchFields.includes('contact') && c.contact && Object.values(c.contact).some(v => v?.includes(searchTxt))) ||
-      (searchFields.includes('related') && c.related?.some(r => r.name?.includes(searchTxt)))
+      (searchFields.includes('name') && match(c.name)) ||
+      (searchFields.includes('title') && match(c.title)) ||
+      (searchFields.includes('ethnicity') && match(c.ethnicity)) ||
+      (searchFields.includes('native_place') && match(c.native_place)) ||
+      (searchFields.includes('location') && match(c.location)) ||
+      (searchFields.includes('address') && match(c.address)) ||
+      (searchFields.includes('id_card') && match(c.id_card)) ||
+      (searchFields.includes('birthday_solar') && match(c.birthday_solar)) ||
+      (searchFields.includes('birthday_lunar') && match(c.birthday_lunar)) ||
+      (searchFields.includes('deathday') && match(c.deathday)) ||
+      (searchFields.includes('extra') && match(c.extra)) ||
+      (searchFields.includes('remark') && match(c.remark)) ||
+      (searchFields.includes('former_name') && c.former_name?.some(match)) ||
+      (searchFields.includes('contact') && c.contact && Object.values(c.contact).some(match)) ||
+      (searchFields.includes('related') && c.related?.some(r => match(r.name)))
     );
 
     return matchesSearch;

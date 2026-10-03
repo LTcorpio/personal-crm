@@ -139,8 +139,13 @@ export default function CrmPage({
     return saved ? JSON.parse(saved) : [];
   });
 
+  // 模糊搜索（拼音全拼 / 首字母），随「搜索范围」浮窗一起配置并持久化
+  const [fuzzySearch, setFuzzySearch] = useState(
+    () => localStorage.getItem('crm_fuzzy_search') === '1'
+  );
+
   // 记录上一轮筛选条件，仅在条件实际变化时才重置页码（兼容 StrictMode 双调用）
-  const prevFilters = useRef({ searchTxt, selectedTagPath, filterNoTag, filterNoAvatar, selectedTopicId, searchFields, crmFeatureMode, viewMode });
+  const prevFilters = useRef({ searchTxt, selectedTagPath, filterNoTag, filterNoAvatar, selectedTopicId, searchFields, fuzzySearch, crmFeatureMode, viewMode });
 
   // 切换筛选条件时重置页码，仅在条件实际变化时执行（兼容 StrictMode 双调用）
   useEffect(() => {
@@ -152,13 +157,14 @@ export default function CrmPage({
       prev.filterNoAvatar !== filterNoAvatar ||
       prev.selectedTopicId !== selectedTopicId ||
       prev.searchFields !== searchFields ||
+      prev.fuzzySearch !== fuzzySearch ||
       prev.crmFeatureMode !== crmFeatureMode ||
       prev.viewMode !== viewMode;
-    prevFilters.current = { searchTxt, selectedTagPath, filterNoTag, filterNoAvatar, selectedTopicId, searchFields, crmFeatureMode, viewMode };
+    prevFilters.current = { searchTxt, selectedTagPath, filterNoTag, filterNoAvatar, selectedTopicId, searchFields, fuzzySearch, crmFeatureMode, viewMode };
     if (changed) {
       setCurrentPage(1);
     }
-  }, [searchTxt, selectedTagPath, filterNoTag, filterNoAvatar, selectedTopicId, searchFields, crmFeatureMode, viewMode]);
+  }, [searchTxt, selectedTagPath, filterNoTag, filterNoAvatar, selectedTopicId, searchFields, fuzzySearch, crmFeatureMode, viewMode]);
 
   // 持久化选中的标签路径、主题ID、页码
   useEffect(() => {
@@ -216,6 +222,11 @@ export default function CrmPage({
   const handleSearchFieldsChange = useCallback((newFields) => {
     setSearchFields(newFields);
     localStorage.setItem('crm_search_fields', JSON.stringify(newFields));
+  }, []);
+
+  const handleFuzzySearchChange = useCallback((enabled) => {
+    setFuzzySearch(enabled);
+    localStorage.setItem('crm_fuzzy_search', enabled ? '1' : '');
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -358,8 +369,8 @@ export default function CrmPage({
 
   const activeContacts = crmFeatureMode === 'topics' ? topicContacts : contacts;
   const filteredContacts = crmFeatureMode === 'topics'
-    ? filterContacts(activeContacts, searchTxt, searchFields, null)
-    : filterContacts(activeContacts, searchTxt, searchFields, selectedTagPath, { noTag: filterNoTag, noAvatar: filterNoAvatar });
+    ? filterContacts(activeContacts, searchTxt, searchFields, null, { fuzzy: fuzzySearch })
+    : filterContacts(activeContacts, searchTxt, searchFields, selectedTagPath, { noTag: filterNoTag, noAvatar: filterNoAvatar, fuzzy: fuzzySearch });
 
   // 「筛选」下拉里两个条件的人数：全库口径（与标签树人数同一套算法，不受搜索框影响）
   const filterCounts = useMemo(() => ({
@@ -594,6 +605,8 @@ export default function CrmPage({
             setSearchTxt={setSearchTxt}
             searchFields={searchFields}
             onSearchFieldsChange={handleSearchFieldsChange}
+            fuzzySearch={fuzzySearch}
+            onFuzzySearchChange={handleFuzzySearchChange}
             leading={siderToggleNode}
           />
 
