@@ -118,7 +118,7 @@ export default function App() {
     <ConfigProvider
       theme={{
         token: {
-          fontFamily: '"LXGW WenKai Screen", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif',
           motion: false
           // motionDurationFast: '0.1s',
           // motionDurationMid: '0.1s',

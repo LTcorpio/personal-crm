@@ -382,10 +382,4 @@ export function initOverlayScrollbar() {
   mo.observe(document.body, { childList: true, subtree: true, characterData: true });
 
   window.addEventListener('resize', scheduleSweep);
-
-  // 自定义字体（LXGW WenKai Screen）是异步加载的，落地后行高会变，
-  // 可能让某些容器才开始可滚动 → 字体就绪后再补扫一次
-  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
-    document.fonts.ready.then(sweep).catch(() => {});
-  }
 }

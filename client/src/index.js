@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
-import 'lxgw-wenkai-screen-webfont/style.css';
 import { initOverlayScrollbar } from './utils/overlayScrollbar';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
