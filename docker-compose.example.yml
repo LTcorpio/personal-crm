@@ -1,0 +1,38 @@
+# ============================================================
+# 个人 CRM —— docker compose 示例文件
+#
+# 用法：
+#   1) 复制为 docker-compose.yml（该文件名已在 .gitignore 中，不会误传）：
+#        cp docker-compose.example.yml docker-compose.yml
+#   2) 按需修改端口、数据目录、Immich 配置
+#   3) 启动（首次会自动构建镜像）：
+#        docker compose up -d --build
+#
+# 说明：
+#   - 单容器即可运行：镜像内已含前端构建产物 + Go 后端二进制
+#   - 数据（crm.db / roster.db / avatars/）统一挂载到容器内 /app/data
+#     （镜像内置默认 DB_DIR=/app/data，无需重复传入）
+#   - 容器内默认 PORT=5197
+# ============================================================
+services:
+  personal-crm:
+    # 由本项目根目录的 Dockerfile 构建；也可先 `make image` 再仅部署
+    image: personal-crm:latest
+    build:
+      context: .
+    container_name: personal-crm
+    restart: always
+    ports:
+      # 默认仅本机监听，配合反向代理（如 nginx + SSO）对外发布。
+      # 需要局域网直连时改为 "5197:5197"。
+      - "127.0.0.1:15197:5197"
+    volumes:
+      # 数据库与头像目录（相对本文件所在目录），首次启动会自动创建
+      - ./data:/app/data
+      # 若 Immich 走私有 CA 的 HTTPS，取消下行注释并放入对应 CA 证书
+      # - ./certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
+    environment:
+      - TZ=Asia/Shanghai
+      # Immich 服务地址与 API Key（留空则跳过一切头像抓取，已有本地头像不受影响）
+      - IMMICH_BASE_URL=${IMMICH_BASE_URL:-https://photo.home.lan}
+      - IMMICH_API_KEY=${IMMICH_API_KEY:-}

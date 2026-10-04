@@ -96,12 +96,15 @@ docker run -d \
   -p 5197:5197 \
   -e IMMICH_BASE_URL=https://photo.home.lan \
   -e IMMICH_API_KEY=你的Immich密钥 \
-  -v "/Volumes/ZHITAI TiPlus5000 1TB/Docker/compose/lifestyle/personal-crm:/app/data" \
+  -v "$PWD/data:/app/data" \
   --name personal-crm \
   personal-crm
 ```
 
 镜像内已包含：前端构建产物（`public/`）+ Go 后端二进制，单容器即可运行。
+
+> 也可用 compose 一键起停：复制仓库根目录的 `docker-compose.example.yml` 为
+> `docker-compose.yml`，按需改端口/挂载后执行 `docker compose up -d --build`。
 
 > 容器内默认 `PORT=5197`、`DB_DIR=/app/data`，无需重复传入。
 

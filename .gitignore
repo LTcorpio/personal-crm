@@ -8,4 +8,11 @@ TODO-LIST
 .env.*.local
 !.env.example
 
+# 本机私有部署配置（含主机路径）不入库，只提交 deploy.mk.example
+deploy.mk
+
+# 由示例复制而来的本地 compose 与数据目录，不入库
+docker-compose.yml
+/data/
+
 client-without-antd
