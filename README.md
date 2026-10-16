@@ -1,6 +1,6 @@
 # 人迹（personal-crm）
 
-一套自托管的私人关系管理系统：React 前端 + 后端服务 + SQLite，支持联系人档案、多级标签、主题分组、名单导入（Excel）与 Immich 人脸头像集成。
+一套自托管的私人关系管理系统：React 前端 + Go 后端 + SQLite，支持联系人档案、多级标签、主题分组、名单导入（Excel）与 Immich 人脸头像集成。
 
 ## 功能特性
 
@@ -12,17 +12,15 @@
 - **本地图片裁剪**：上传本地图片时在浏览器内裁剪成正方形（导出 512×512 JPEG），裁剪前的原图一并原样存档，历史里可随时「查看 / 下载原图」或「重新裁剪」
 - **历史头像管理**：记录每位联系人用过的每一张头像，标注来源（Immich / 本地上传）与是否裁剪过，支持回看、回切为当前、重新裁剪、删除；当前头像不可直接删除，物理文件在无任何引用时才回收。弹窗内的切换 / 上传 / 删除都只改本地草稿，点弹窗「保存」才真正生效，直接关闭则全部丢弃
 - **改动保护**：头像弹窗与联系人编辑表单在存在未保存改动时，关闭前都会二次确认，避免误关丢失编辑内容
-- **安全认证**：密码登录 + JWT（7 天有效期）+ 服务端会话表，支持在线修改密码与密钥；密码使用 PBKDF2-SHA512 存储
+- **认证**：后端不内置登录与鉴权，身份认证交由反向代理层（如 Authelia SSO）统一处理
 - **精细差异比对**：保存时快照比对新旧数据，无实际修改不刷新 `updated_at` 时间戳
-- **双后端实现**：Node.js（`server/`）与 Go（`server-go/`）行为完全对齐，接口契约一致，可任选其一部署
 
 ## 技术栈
 
 | 层 | 技术 |
 | --- | --- |
 | 前端 | React 19、Ant Design 6、Tailwind CSS 3、React Router 7、dnd-kit |
-| Node 后端 | Express 5、node-sqlite3、jsonwebtoken、multer、SheetJS(xlsx) |
-| Go 后端 | Go 1.25、modernc.org/sqlite（纯 Go 无 CGO）、golang-jwt/v5、excelize、extrame/xls |
+| 后端 | Go 1.25、modernc.org/sqlite（纯 Go 无 CGO）、excelize、extrame/xls |
 | 数据库 | SQLite（`crm.db` 主库 + `roster.db` 名单库） |
 | 部署 | Docker 多阶段构建（前端编译 → Go 交叉编译 → Alpine 运行时） |
 
@@ -36,21 +34,14 @@ personal-crm/
 │       ├── components/      # 联系人卡片/标签管理/统计视图等组件
 │       ├── pages/           # 登录、CRM 主页、名单管理、工具页
 │       └── views/           # 统计视图等
-├── server/                  # Node.js 后端（保留，与 Go 版二选一）
-│   ├── server.js            # 入口：静态托管 + SPA 兜底
-│   ├── routes/              # 联系人与名单路由
-│   ├── controllers/         # 业务逻辑
-│   ├── middleware/          # JWT 鉴权
-│   ├── config/              # 数据库连接
-│   └── utils/               # 独立工具脚本（batchTool、Immich 元数据导出）
-├── server-go/               # Go 后端（Docker 默认构建此实现）
+├── server-go/               # Go 后端
 │   ├── cmd/server/          # main 入口
 │   └── internal/
 │       ├── api/             # 全部 HTTP 路由与处理器
-│       ├── auth/            # JWT 签发/校验、密码哈希
+│       ├── avatar/          # 本地头像落盘与代理
 │       ├── config/          # .env 加载与配置
 │       ├── store/           # SQLite 打开、建表、轻量迁移
-│       ├── excel/           # .xls/.xlsx 解析（对齐 SheetJS 行为）
+│       ├── excel/           # .xls/.xlsx 解析
 │       └── web/             # 响应工具函数
 ├── Dockerfile               # 多阶段构建（前端 + Go 后端）
 └── .dockerignore
@@ -58,20 +49,14 @@ personal-crm/
 
 ## 快速开始（本地开发）
 
-### 1. 启动后端（二选一）
+### 1. 启动后端
 
 ```bash
-# 方式 A：Node.js 后端
-cd server
-npm install
-node server.js            # 开发可改用: npx nodemon server.js
-
-# 方式 B：Go 后端（行为与 Node 版一致）
 cd server-go
 go run ./cmd/server
 ```
 
-默认监听 `http://0.0.0.0:15197`，首次启动自动建表并初始化默认密码（`admin123`）与 JWT 密钥。
+默认监听 `http://0.0.0.0:15197`，首次启动自动建表。
 
 ### 2. 启动前端
 
@@ -83,10 +68,6 @@ npm start                  # http://localhost:3000
 ```
 
 > 开发模式下前端通过 `REACT_APP_BACKEND_PORT` 跨端口访问后端 API；生产构建后走相对路径 `/api`。
-
-### 3. 登录
-
-浏览器打开前端地址，使用默认密码 `admin123` 登录，登录后请在设置中及时修改。
 
 ## Docker 部署
 
@@ -117,17 +98,15 @@ bind mount 到容器内 `/app/data` 即可。头像与数据库同目录，外�
 | 变量 | 说明 | 默认值 |
 | --- | --- | --- |
 | `PORT` | 后端监听端口 | `15197` |
-| `DB_DIR` | SQLite 数据目录（Node 版相对 `server/`，Go 版相对工作目录） | `data` |
+| `DB_DIR` | SQLite 数据目录（相对工作目录） | `data` |
 | `AVATAR_DIR` | 头像文件目录（可选），默认跟随数据库目录 | `$DB_DIR/avatars` |
 | `IMMICH_BASE_URL` | Immich 服务地址，仅「抓取 / 同步头像」时访问 | `https://photo.home.lan` |
 | `IMMICH_API_KEY` | Immich API Key，留空则跳过一切头像抓取（已有本地头像不受影响） | 无 |
 | `REACT_APP_BACKEND_PORT` | （仅前端开发模式）后端端口 | 无 |
 
-> `JWT_SECRET` / `CRM_PASSWORD` 属于 Node 版；当前 Go 版的身份认证已交给反向代理层（Authelia SSO），不再使用这两项。
+以上变量均可写入 `.env` 文件（`client/.env`、`server-go/.env`）。
 
-以上变量均可写入 `.env` 文件（`client/.env`、`server/.env`、`server-go/.env`）。
-
-**`.env` 不入库，仓库里只提交 `.env.example`。** 各目录均提供 `client/.env.example`、`server/.env.example`、`server-go/.env.example`，复制成 `.env` 后按需修改即可；`.env` 已被根 `.gitignore` 与 `.dockerignore` 排除，含密钥与本机路径的真实配置不会进入仓库或镜像。
+**`.env` 不入库，仓库里只提交 `.env.example`。** 各目录均提供 `client/.env.example`、`server-go/.env.example`，复制成 `.env` 后按需修改即可；`.env` 已被根 `.gitignore` 与 `.dockerignore` 排除，含密钥与本机路径的真实配置不会进入仓库或镜像。
 
 ## 数据库说明
 
@@ -155,12 +134,8 @@ bind mount 到容器内 `/app/data` 即可。头像与数据库同目录，外�
 - 删除规则：当前头像不可直接删除；磁盘文件（含原图）仅当「方图列 + 原图列」全局都无引用时才回收
 - 清空 `face_uuid` 不会删除本地头像——两者已解耦
 
-## 关于双后端
-
-`server/`（Node.js）为原始实现，`server-go/` 为 Go 重写版，两者对外接口行为、响应结构、时间戳语义完全一致：
+## API 约定
 
 - 接口前缀：`/api`、`/api/rosters`
-- 认证方式：`Authorization: Bearer <token>`（登录、名单解析外的全部接口均需鉴权）
+- 后端不做任何密码 / JWT 校验，完全信任反向代理转发过来的请求；认证请在上游代理层完成
 - CORS：默认放行所有来源（OPTIONS 预检返回 204）
-
-当前 Dockerfile 构建 Go 版；如需切回 Node 版，将阶段二/三替换为 Node 镜像 + `npm install --production` + `CMD ["node", "server.js"]` 即可。

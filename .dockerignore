@@ -1,11 +1,9 @@
 node_modules
 client/node_modules
-server/node_modules
 client/build
 client/dist
 .env
 client/.env
-server/.env
 server-go/.env
 .DS_Store
 **/.DS_Store

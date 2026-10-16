@@ -8,7 +8,6 @@ COPY client/ ./
 RUN npm run build
 
 # === 阶段二：编译 Go 后端 ===
-# 原 Node 后端（server/ 目录）保留在仓库中，此处仅构建 Go 实现（server-go/）
 FROM golang:1.25-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59 AS go-builder
 WORKDIR /app/server-go
 # 先复制依赖清单，利用 Docker 层缓存加速重复构建
